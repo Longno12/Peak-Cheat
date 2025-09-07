@@ -1,11 +1,11 @@
-﻿using Photon.Pun;
+using Photon.Pun;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
 
-public class BeeSwarm : MonoBehaviourPun { }
 
 namespace MyCoolMod
 {
@@ -79,6 +79,22 @@ namespace MyCoolMod
             }
         }
 
+        public static void RenderPlayerDead(Character target)
+        {
+            if (target?.refs?.customization?.GetComponent<PhotonView>() != null)
+            {
+                target.refs.customization.GetComponent<PhotonView>().RPC("CharacterDied", RpcTarget.All);
+            }
+        }
+        public static void RenderDead()
+        {
+            var p = PlayerManager.GetLocalPlayer();
+            if (p != null) RenderPlayerDead(p);
+        }
+        public static void RenderAllDead()
+        {
+            ActionOnAllPlayers(RenderPlayerDead);
+        }
         public static void TeleportPlayerToMe(Character target)
         {
             var localPlayer = PlayerManager.GetLocalPlayer();
@@ -176,15 +192,86 @@ namespace MyCoolMod
         }
         public static void EndGame()
         {
-            var player = UnityEngine.Object.FindObjectOfType<Player>();
+            var player = UnityEngine.Object.FindAnyObjectByType<Player>();
             if (player?.photonView != null) player.photonView.RPC("RPCEndGame", RpcTarget.All);
         }
-        public static void ForceWinGame()
+        public static void SpawnNetworkedJellyfish(Character charac)
         {
-            var player = UnityEngine.Object.FindObjectOfType<Player>();
-            if (player?.photonView != null) player.photonView.RPC("RPCEndGame_ForceWin", RpcTarget.All, PhotonNetwork.LocalPlayer);
-        }
+            GameObject root = new GameObject("JellyfishRoot");
+            PhotonView pv = root.AddComponent<PhotonView>();
+            pv.ViewID = UnityEngine.Random.Range(10000, 99999);
+            pv.TransferOwnership(charac.photonView.ViewID);
+            TriggerRelay relay = root.AddComponent<TriggerRelay>();
+            GameObject child = new GameObject("SlipperyJellyfish");
+            child.transform.SetParent(root.transform);
+            var jelly = child.AddComponent<SlipperyJellyfish>();
+            var col = child.AddComponent<SphereCollider>();
+            col.isTrigger = true;
+            root.transform.position = charac.refs.head.transform.position;
+            pv.RPC("RPCA_TriggerWithTarget", RpcTarget.All, new object[]
+            {
+            root.transform.GetSiblingIndex(),
+            charac.photonView.ViewID
+            });
 
+        }
+        public static void JellyfishSelf()
+        {
+            var localPlayer = PlayerManager.GetLocalPlayer();
+            if (localPlayer != null)
+            {
+                SpawnNetworkedJellyfish(localPlayer);
+            }
+        }
+        public static void JellyfishAll()
+        {
+            ActionOnAllPlayers(SpawnNetworkedJellyfish);
+        }
+        public static void JellyfishBomb(Character target, int count = 5)
+        {
+            if (target == null) return;
+
+            for (int i = 0; i < count; i++)
+            {
+                SpawnNetworkedJellyfish(target);
+            }
+        }
+        private static void SpawnJellyfishTrapAtPosition(Vector3 position)
+        {
+            GameObject root = new GameObject("JellyfishTrapRoot");
+            root.transform.position = position;
+            PhotonView pv = root.AddComponent<PhotonView>();
+            pv.ViewID = UnityEngine.Random.Range(10000, 99999);
+            pv.TransferOwnership(PhotonNetwork.LocalPlayer);
+            GameObject child = new GameObject("SlipperyJellyfish");
+            child.transform.SetParent(root.transform);
+            child.AddComponent<SlipperyJellyfish>();
+            var col = child.AddComponent<SphereCollider>();
+            col.isTrigger = true;
+        }
+        public static void PlaceJellyfishTrap()
+        {
+            if (Camera.main == null) return;
+
+            if (Physics.Raycast(Camera.main.transform.position, Camera.main.transform.forward, out RaycastHit hit, 100f))
+            {
+                SpawnJellyfishTrapAtPosition(hit.point + Vector3.up * 0.5f);
+                Plugin.Log.LogInfo($"Jellyfish trap placed at {hit.point}");
+            }
+        }
+        public static void JellyfishRain(Character target, float radius = 10f, int count = 15)
+        {
+            if (target == null) return;
+
+            Vector3 center = target.Head + Vector3.up * 30f;
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector2 randomCirclePoint = UnityEngine.Random.insideUnitCircle * radius;
+                Vector3 spawnPos = new Vector3(center.x + randomCirclePoint.x, center.y, center.z + randomCirclePoint.y);
+                SpawnJellyfishTrapAtPosition(spawnPos);
+            }
+        }
         public static void CrashPlayer(Character target)
         {
             if (target?.photonView?.Controller == null)
@@ -196,6 +283,7 @@ namespace MyCoolMod
             try
             {
                 PhotonNetwork.SetMasterClient(PhotonNetwork.LocalPlayer);
+                PhotonNetwork.CurrentRoom.SetMasterClient(PhotonNetwork.LocalPlayer);
                 if (PhotonNetwork.IsMasterClient)
                 {
                     PhotonNetwork.DestroyPlayerObjects(target.photonView.Controller);
@@ -213,7 +301,11 @@ namespace MyCoolMod
         }
         public static void CrashAll() => ActionOnAllPlayers(CrashPlayer);
         public static void CrashSelf() { var p = PlayerManager.GetLocalPlayer(); if (p != null) CrashPlayer(p); }
-
+        public static void ForceWinGame()
+        {
+            var player = UnityEngine.Object.FindAnyObjectByType<Player>();
+            if (player?.photonView != null) player.photonView.RPC("RPCEndGame_ForceWin", RpcTarget.All, PhotonNetwork.LocalPlayer);
+        }
         private static Texture2D drawingTex;
         private static Color lastTexColour = Color.clear;
         internal static void RectFilled(float x, float y, float width, float height, Color color)
@@ -242,14 +334,14 @@ namespace MyCoolMod
 
                 Vector3[] corners = new Vector3[8]
                 {
-            center + new Vector3(-extents.x, -extents.y, -extents.z),
-            center + new Vector3(extents.x, -extents.y, -extents.z),
-            center + new Vector3(-extents.x, -extents.y, extents.z),
-            center + new Vector3(extents.x, -extents.y, extents.z),
-            center + new Vector3(-extents.x, extents.y, -extents.z),
-            center + new Vector3(extents.x, extents.y, -extents.z),
-            center + new Vector3(-extents.x, extents.y, extents.z),
-            center + new Vector3(extents.x, extents.y, extents.z)
+                    center + new Vector3(-extents.x, -extents.y, -extents.z),
+                    center + new Vector3(extents.x, -extents.y, -extents.z),
+                    center + new Vector3(-extents.x, -extents.y, extents.z),
+                    center + new Vector3(extents.x, -extents.y, extents.z),
+                    center + new Vector3(-extents.x, extents.y, -extents.z),
+                    center + new Vector3(extents.x, extents.y, -extents.z),
+                    center + new Vector3(-extents.x, extents.y, extents.z),
+                    center + new Vector3(extents.x, extents.y, extents.z)
                 };
 
                 Vector2 min = new Vector2(float.MaxValue, float.MaxValue);
@@ -283,6 +375,155 @@ namespace MyCoolMod
                     RectFilled(min.x + width, min.y, 1f, height, color);
                     RectFilled(min.x, min.y + height, width, 1f, color);
                 }
+            }
+        }
+        public static void StunLockAll()
+        {
+            ActionOnAllPlayers(StunLockPlayer);
+        }
+        public static void FlingAll()
+        {
+            ActionOnAllPlayers(FlingPlayer);
+        }
+        public static void TumblePlayer(Character target)
+        {
+            if (target == null || target.photonView == null) return;
+            float randomX = UnityEngine.Random.Range(-5000f, 5000f);
+            float randomY = UnityEngine.Random.Range(2000f, 6000f);
+            float randomZ = UnityEngine.Random.Range(-5000f, 5000f);
+            Vector3 tumbleForce = new Vector3(randomX, randomY, randomZ);
+            target.photonView.RPC("RPCA_Fall", RpcTarget.All, 3f);
+            target.photonView.RPC("RPCA_AddForceToBodyPart", RpcTarget.All, 0, tumbleForce);
+        }
+        public static void ForcePassOutPlayer(Character target)
+        {
+            if (target == null || target.photonView == null) return;
+            target.photonView.RPC("RPCA_PassOut", RpcTarget.All);
+        }
+        public static void StunLockPlayer(Character target)
+        {
+            if (target == null || target.photonView == null) return;
+            for (int i = 0; i < 10; i++)
+            {
+                target.photonView.RPC("JumpRpc", RpcTarget.All, false);
+            }
+        }
+        public static void FlingPlayer(Character target)
+        {
+            if (target == null || target.photonView == null) return;
+
+            target.photonView.RPC("RPCA_Fall", RpcTarget.All, 3f);
+            Vector3 flingForce = (Vector3.up * 1000000f) + (Camera.main.transform.forward * 4000f);
+            target.photonView.RPC("RPCA_AddForceToBodyPart", RpcTarget.All, 0, flingForce);
+        }
+        public static void ToggleAlwaysSprint()
+        {
+            Plugin.AlwaysSprintEnabled = !Plugin.AlwaysSprintEnabled;
+        }
+        public static void ToggleNoFallDamage()
+        {
+            Plugin.NoFallDamageEnabled = !Plugin.NoFallDamageEnabled;
+        }
+        public static void ToggleKeepItemsOnDeath()
+        {
+            Plugin.KeepItemsEnabled = !Plugin.KeepItemsEnabled;
+        }
+        public static void ReviveAllPlayers()
+        {
+            var allPlayers = PlayerManager.GetAllCharacters();
+            if (allPlayers == null) return;
+            foreach (var player in allPlayers)
+            {
+                if (player != null && (player.data.dead || player.data.fullyPassedOut))
+                {
+                    RevivePlayer(player);
+                }
+            }
+        }
+        public static void KillAllPlayers()
+        {
+            ActionOnAllPlayers(KillPlayer);
+        }
+        public static void ForcePlayerToCarryMe(Character target)
+        {
+            var localPlayer = PlayerManager.GetLocalPlayer();
+            if (target == null || localPlayer == null || target == localPlayer) return;
+            PerformActionOnPlayer(target, "RPCA_StartCarry", localPlayer.photonView);
+        }
+        public static void MakePlayerCarryPlayer(Character carrier, Character targetToCarry)
+        {
+            if (carrier == null || targetToCarry == null || carrier == targetToCarry) return;
+            PerformActionOnPlayer(carrier, "RPCA_StartCarry", targetToCarry.photonView);
+        }
+        public static void CarryAndFling(Character target)
+        {
+            var localPlayer = PlayerManager.GetLocalPlayer();
+            if (target == null || localPlayer == null) return;
+            PerformActionOnPlayer(localPlayer, "RPCA_StartCarry", target.photonView);
+            FlingPlayer(localPlayer);
+        }
+        public static System.Collections.IEnumerator CreatePlayerChainRoutine()
+        {
+            var allPlayers = PlayerManager.GetAllCharacters();
+            if (allPlayers == null || allPlayers.Count < 2) yield break;
+
+            var playerList = new List<Character>(allPlayers);
+            var localPlayer = PlayerManager.GetLocalPlayer();
+            if (localPlayer != null)
+            {
+                playerList.Remove(localPlayer);
+            }
+
+            if (playerList.Count < 2) yield break;
+
+            Plugin.Log.LogInfo("Starting player chain...");
+
+            for (int i = 0; i < playerList.Count - 1; i++)
+            {
+                Character carrier = playerList[i];
+                Character targetToCarry = playerList[i + 1];
+
+                if (carrier != null && targetToCarry != null)
+                {
+                    MakePlayerCarryPlayer(carrier, targetToCarry);
+                    yield return new WaitForSeconds(0.2f);
+                }
+            }
+
+            Plugin.Log.LogInfo("Player chain complete.");
+        }
+        public static void GiveItemToPlayer(Character target, string itemName)
+        {
+            if (target == null || string.IsNullOrEmpty(itemName) || target.photonView == null)
+            {
+                Plugin.Log.LogWarning("GiveItemToPlayer failed: Target or itemName was invalid.");
+                return;
+            }
+            target.photonView.RPC("RPC_SpawnItemInHandMaster", RpcTarget.MasterClient, itemName);
+            Plugin.Log.LogInfo($"Sent request to Master Client to give '{itemName}' to {target.characterName}.");
+        }
+        public static void MeteorStrikePlayer(Character target)
+        {
+            if (target == null || target.photonView == null) return;
+            Vector3 currentPos = target.transform.position;
+            Vector3 skyPos = new Vector3(currentPos.x, currentPos.y + 200f, currentPos.z);
+            PerformActionOnPlayer(target, "WarpPlayerRPC", skyPos, false);
+            Vector3 downwardForce = Vector3.down * 50000f;
+            PerformActionOnPlayer(target, "RPCA_AddForceToBodyPart", 0, downwardForce);
+        }
+        public static void SpamPoofEffect(Character target)
+        {
+            if (target == null || target.photonView == null) return;
+            PerformActionOnPlayer(target, "WarpPlayerRPC", target.transform.position, true);
+        }
+        public static void DisarmPlayer(Character target)
+        {
+            if (target == null || target.refs?.items?.currentSelectedSlot == null) return;
+            if (target.refs.items.currentSelectedSlot.IsSome)
+            {
+                byte equippedSlotId = target.refs.items.currentSelectedSlot.Value;
+                Vector3 dropPosition = target.Center;
+                PerformActionOnPlayer(target, "DropItemFromSlotRPC", equippedSlotId, dropPosition);
             }
         }
         public static void DumpRPCsToFile()
