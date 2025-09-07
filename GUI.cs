@@ -7,23 +7,19 @@ namespace MyCoolMod
 {
     public class ModGUI : MonoBehaviour
     {
-        // --- GUI State ---
-        private Rect _windowRect = new Rect(20, 20, 800, 700); // Increased size for a better layout
+        private Rect _windowRect = new Rect(20, 20, 800, 700);
         private bool _stylesInitialized = false;
         private enum Tab { Player, Self, Troll, ESP, Misc }
         private Tab _currentTab = Tab.Player;
         private readonly string[] _tabNames = { "Player", "Self", "Troll", "ESP", "Misc" };
 
-        // --- Scroll Positions ---
-        // Added individual scroll positions for each tab's content area
         private Vector2 _playerTabScrollPos;
         private Vector2 _selfTabScrollPos;
         private Vector2 _trollTabScrollPos;
         private Vector2 _espTabScrollPos;
         private Vector2 _miscTabScrollPos;
-        private Vector2 _playerListScrollPos; // Specifically for the list of players
+        private Vector2 _playerListScrollPos;
 
-        // --- Player Action Enum (Expanded) ---
         private enum PlayerAction
         {
             None, Revive, Kill, RenderDead, Bees, Crash, Fling, StunLock, Tumble, Disarm,
@@ -85,7 +81,6 @@ namespace MyCoolMod
             _currentTab = (Tab)GUILayout.Toolbar((int)_currentTab, _tabNames, _buttonStyle);
             GUILayout.Space(10);
 
-            // Each tab's content is now wrapped in a scroll view to prevent overflow
             switch (_currentTab)
             {
                 case Tab.Player:
@@ -125,7 +120,6 @@ namespace MyCoolMod
         {
             GUILayout.BeginHorizontal();
 
-            // Left column for player settings
             GUILayout.BeginVertical(GUILayout.Width(350));
             Section("Player Settings", () =>
             {
@@ -136,7 +130,6 @@ namespace MyCoolMod
             });
             GUILayout.EndVertical();
 
-            // Right column for player list
             GUILayout.BeginVertical();
             CreatePlayersVerticalSelect();
             GUILayout.EndVertical();
@@ -166,7 +159,6 @@ namespace MyCoolMod
             });
             Section("Self Actions", () =>
             {
-                // Reorganized buttons into a more compact grid
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Revive Self", _buttonStyle)) ModUtilities.ReviveSelf();
                 if (GUILayout.Button("Kill Self", _buttonStyle)) ModUtilities.KillSelf();
@@ -200,7 +192,6 @@ namespace MyCoolMod
         {
             GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
 
-            // --- Single Player Actions Column ---
             Section("Single Player Actions", () =>
             {
                 GUILayout.Label("Jellyfish:", _labelStyle);
@@ -243,7 +234,6 @@ namespace MyCoolMod
 
             }, GUILayout.Width(370));
 
-            // --- All Players Actions Column ---
             Section("All Players Actions (Excludes You)", () =>
             {
                 GUILayout.Label("Core Actions:", _labelStyle);
@@ -313,7 +303,7 @@ namespace MyCoolMod
                             case PlayerAction.CarryAndFling: ModUtilities.CarryAndFling(target); break;
                         }
                         _pendingAction = PlayerAction.None;
-                        return; // Exit after action
+                        return;
                     }
                 }
                 GUILayout.EndScrollView();
@@ -363,7 +353,6 @@ namespace MyCoolMod
             });
         }
 
-        // Overloaded Section helper to accept layout options for more flexible layouts
         private void Section(string title, Action content, params GUILayoutOption[] options)
         {
             GUILayout.BeginVertical(_boxStyle, options);
@@ -374,7 +363,6 @@ namespace MyCoolMod
             GUILayout.Space(10);
         }
 
-        // Original Section method for compatibility
         private void Section(string title, Action content)
         {
             Section(title, content, Array.Empty<GUILayoutOption>());
@@ -514,3 +502,4 @@ namespace MyCoolMod
         #endregion
     }
 }
+
