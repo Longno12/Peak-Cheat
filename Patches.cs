@@ -112,6 +112,7 @@ namespace ClassLibrary1
         [HarmonyPatch(typeof(CharacterItems), "DropAllItems")]
         public static class KeepItemsPatch
         {
+            // The [HarmonyPrefix] attribute MUST go directly on the Prefix method itself.
             [HarmonyPrefix]
             public static bool Prefix()
             {
