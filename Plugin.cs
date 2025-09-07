@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
 using UnityEngine.UI.Extensions;
@@ -19,6 +19,17 @@ namespace MyCoolMod
         public static bool StatusImmunityEnabled { get; set; } = false;
         public static float SpeedMultiplier { get; set; } = 1.0f;
         public static float JumpMultiplier { get; set; } = 1.0f;
+        public static bool ThirdPersonEnabled { get; set; } = false;
+        public static float ThirdPersonDistance { get; set; } = 3.0f;
+        public static float ThirdPersonHeight { get; set; } = 0.5f;
+        public static float ThirdPersonSmoothing { get; set; } = 15.0f;
+        public static bool NoFallDamageEnabled { get; set; } = false;
+        public static bool AlwaysSprintEnabled { get; set; } = false;
+        public static bool KeepItemsEnabled { get; set; } = false;
+        public static bool HealthBarEspEnabled { get; set; } = false;
+        public static bool StaminaBarEspEnabled { get; set; } = false;
+        public static bool HeldItemEspEnabled { get; set; } = false;
+        public static bool SkeletonEspEnabled { get; set; } = false;
 
         public static ManualLogSource Log;
         internal static bool IsGuiVisible = true;
