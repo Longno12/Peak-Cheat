@@ -1,4 +1,4 @@
-using BepInEx;
+﻿using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
 using UnityEngine.UI.Extensions;
@@ -33,7 +33,10 @@ namespace MyCoolMod
 
         public static ManualLogSource Log;
         internal static bool IsGuiVisible = true;
-
+        private void FixedUpdate()
+        {
+            FlyMod.HandleFly();
+        }
         private void Update()
         {
             if (!_rpcReceiverInjected && Character.localCharacter != null)

@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using MyCoolMod;
 using System;
 using System.Collections.Generic;
@@ -112,7 +112,6 @@ namespace ClassLibrary1
         [HarmonyPatch(typeof(CharacterItems), "DropAllItems")]
         public static class KeepItemsPatch
         {
-            // The [HarmonyPrefix] attribute MUST go directly on the Prefix method itself.
             [HarmonyPrefix]
             public static bool Prefix()
             {
@@ -130,7 +129,7 @@ namespace ClassLibrary1
         {
             private static bool Prefix()
             {
-                return !ModGUI.NoSL;
+                return !NoSL;
             }
         }
 
@@ -139,7 +138,7 @@ namespace ClassLibrary1
         {
             private static bool Prefix()
             {
-                return !ModGUI.NoP;
+                return !NoP;
             }
         }
 
@@ -148,7 +147,7 @@ namespace ClassLibrary1
         {
             private static bool Prefix()
             {
-                return !ModGUI.NoP;
+                return !NoP;
             }
         }
 
@@ -157,7 +156,7 @@ namespace ClassLibrary1
         {
             private static bool Prefix()
             {
-                return !ModGUI.NoD;
+                return !NoD;
             }
         }
 
@@ -166,8 +165,14 @@ namespace ClassLibrary1
         {
             private static bool Prefix()
             {
-                return !ModGUI.NoD;
+                return !NoD;
             }
         }
+        public static bool NoS;
+        public static bool NoP;
+        public static bool NoR;
+        public static bool NoD;
+        public static bool NoSL;
+        public static bool NoDstry;
     }
 }
