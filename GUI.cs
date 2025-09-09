@@ -9,7 +9,6 @@ namespace MyCoolMod
 {
     public class ModGUI : MonoBehaviour
     {
-        // --- Singleton & Persistence ---
         public static ModGUI Instance { get; private set; }
 
         void Awake()
@@ -18,6 +17,88 @@ namespace MyCoolMod
             Instance = this;
             DontDestroyOnLoad(gameObject);
         }
+
+        #region --- NEW: Notification System ---
+
+        public enum NotificationType { Info, Success, Warning, Error }
+
+        private class Notification
+        {
+            public string Title;
+            public string Message;
+            public NotificationType Type;
+            public float StartTime;
+            public float Duration;
+            public float CurrentAlpha;
+        }
+
+        private static List<Notification> _activeNotifications = new List<Notification>();
+        private GUIStyle _notificationBoxStyle, _notificationTitleStyle, _notificationMessageStyle;
+        public static void ShowNotification(string title, string message, NotificationType type = NotificationType.Info, float duration = 4f)
+        {
+            _activeNotifications.Add(new Notification
+            {
+                Title = title,
+                Message = message,
+                Type = type,
+                StartTime = Time.time,
+                Duration = duration,
+                CurrentAlpha = 0f
+            });
+        }
+
+        private void DrawNotifications()
+        {
+            if (_activeNotifications.Count == 0) return;
+
+            float startY = 20f;
+            float notificationHeight = 60f;
+            float spacing = 10f;
+            float notificationWidth = 300f;
+            float fadeInTime = 0.3f;
+            float fadeOutTime = 0.5f;
+
+            for (int i = _activeNotifications.Count - 1; i >= 0; i--)
+            {
+                var notif = _activeNotifications[i];
+                float age = Time.time - notif.StartTime;
+                if (age < fadeInTime) notif.CurrentAlpha = Mathf.Lerp(0, 1, age / fadeInTime);
+                else if (age > notif.Duration) notif.CurrentAlpha = Mathf.Lerp(1, 0, (age - notif.Duration) / fadeOutTime);
+                else notif.CurrentAlpha = 1f;
+
+                if (age > notif.Duration + fadeOutTime)
+                {
+                    _activeNotifications.RemoveAt(i);
+                    continue;
+                }
+                Color baseColor = GetNotificationColor(notif.Type);
+                Color textColor = Theme.Text;
+                textColor.a = notif.CurrentAlpha;
+                Color boxColor = Theme.Primary;
+                boxColor.a = notif.CurrentAlpha * 0.9f;
+                GUI.backgroundColor = boxColor;
+                _notificationTitleStyle.normal.textColor = textColor;
+                _notificationMessageStyle.normal.textColor = textColor;
+                Rect rect = new Rect(Screen.width - notificationWidth - 20f, startY + (i * (notificationHeight + spacing)), notificationWidth, notificationHeight);
+                GUI.Box(rect, GUIContent.none, _notificationBoxStyle);
+                Rect titleRect = new Rect(rect.x + 10, rect.y + 5, rect.width - 20, 25);
+                GUI.Label(titleRect, notif.Title, _notificationTitleStyle);
+                Rect messageRect = new Rect(rect.x + 10, rect.y + 25, rect.width - 20, 30);
+                GUI.Label(messageRect, notif.Message, _notificationMessageStyle);
+            }
+        }
+
+        private Color GetNotificationColor(NotificationType type)
+        {
+            switch (type)
+            {
+                case NotificationType.Success: return Color.green;
+                case NotificationType.Warning: return Color.yellow;
+                case NotificationType.Error: return Color.red;
+                default: return Theme.Accent;
+            }
+        }
+        #endregion
 
         // --- GUI State & Layout ---
         private Rect _windowRect = new Rect(20, 20, 950, 650);
@@ -57,9 +138,14 @@ namespace MyCoolMod
         void OnGUI()
         {
             if (!_stylesInitialized) InitializeStyles();
+
             if (Plugin.EspEnabled || Plugin.TracersEnabled || Plugin.BoxEspEnabled || Plugin.SkeletonEspEnabled) DrawESP();
-            if (!Plugin.IsGuiVisible) return;
-            _windowRect = GUI.Window(12345, _windowRect, DrawWindow, "", _windowStyle);
+            if (Plugin.IsGuiVisible)
+            {
+                _windowRect = GUI.Window(12345, _windowRect, DrawWindow, "", _windowStyle);
+            }
+
+            DrawNotifications();
         }
 
         void DrawWindow(int windowID)
@@ -133,6 +219,7 @@ namespace MyCoolMod
                 if (GUILayout.Button(FlyMod.IsFlying ? $"<b><color=lime>Flight System [ON - {FlyMod.CurrentMode}]</color></b>" : "Flight System [OFF]", _buttonStyle))
                 {
                     FlyMod.ToggleFly();
+                    ShowNotification("Flight System", FlyMod.IsFlying ? "Enabled" : "Disabled");
                 }
                 GUI.enabled = FlyMod.IsFlying;
                 GUILayout.Label("Flight Mode:", _labelStyle);
@@ -159,23 +246,20 @@ namespace MyCoolMod
 
             CollapsibleSection("Actions", () =>
             {
-                if (GUILayout.Button("Revive Self", _buttonStyle)) ModUtilities.ReviveSelf();
-                if (GUILayout.Button("Kill Self", _buttonStyle)) ModUtilities.KillSelf();
+                if (GUILayout.Button("Revive Self", _buttonStyle)) { ModUtilities.ReviveSelf(); }
+                if (GUILayout.Button("Kill Self", _buttonStyle)) { ModUtilities.KillSelf(); }
+                if (GUILayout.Button("Trip Self", _buttonStyle)) { ModUtilities.TripSelf(); }
+                if (GUILayout.Button("Pass Out Self", _buttonStyle)) { ModUtilities.PassOutSelf(); }
                 if (GUILayout.Button("<b><color=red>Crash Self</color></b>", _buttonStyle)) ModUtilities.CrashSelf();
-                if (GUILayout.Button("Spawn Guidebook", _buttonStyle))
-                {
-                    GuidebookMods.SpawnGuidebookInFront();
-                }
             });
 
-            CollapsibleSection("Guidebook Tools (If Held)", () =>
+            CollapsibleSection("Self Trolling / Effects", () =>
             {
-                GUILayout.Label("Use your own guidebook as a powerful tool.", _labelStyle);
-                if (GUILayout.Button("Display Player List in Book", _buttonStyle)) GuidebookMods.DisplayPlayerListInMyBook();
-                GUI.enabled = _selectedCharacter != null;
-                if (GUILayout.Button(_selectedCharacter != null ? $"Turn My Book into Spycam on {_selectedCharacter.characterName}" : "Select a Player to Spy On", _buttonStyle)) GuidebookMods.TurnMyBookIntoSpyCamera(_selectedCharacter);
-                GUI.enabled = true;
-                if (GUILayout.Button("Scramble My Own Book", _buttonStyle)) StartCoroutine(GuidebookMods.ScrambleMyBook());
+                if (GUILayout.Button("Bees!", _buttonStyle)) { ModUtilities.BeesSelf(); }
+                if (GUILayout.Button("Jellyfish!", _buttonStyle)) { ModUtilities.JellyfishSelf(); }
+                if (GUILayout.Button("Cactus!", _buttonStyle)) { ModUtilities.CactusSelf(); }
+                if (GUILayout.Button("Explode!", _buttonStyle)) { ModUtilities.ExplodeSelf(); }
+                if (GUILayout.Button("Magic Bean!", _buttonStyle)) { ModUtilities.MagicBeanSelf(); }
             });
 
             GUILayout.EndScrollView();
@@ -183,23 +267,13 @@ namespace MyCoolMod
 
         private void DrawPlayerTargetingCategory()
         {
-            // Auto-refresh player list if it's empty when entering the tab
-            if (_playerDict.Count == 0 && Character.AllCharacters != null && Character.AllCharacters.Count > 1)
-            {
-                RefreshPlayerDict();
-            }
-
+            if (_playerDict.Count == 0 && Character.AllCharacters != null && Character.AllCharacters.Count > 1) RefreshPlayerDict();
             GUILayout.BeginHorizontal();
-
             GUILayout.BeginVertical(GUILayout.Width(250));
             if (GUILayout.Button("Refresh Players", _buttonStyle)) RefreshPlayerDict();
             _playerSearchBuffer = GUILayout.TextField(_playerSearchBuffer, _textFieldStyle);
             _playerListScrollPos = GUILayout.BeginScrollView(_playerListScrollPos);
-
-            var filteredKeys = _playerDict.Keys
-                .Where(name => string.IsNullOrEmpty(_playerSearchBuffer) || name.ToLower().Contains(_playerSearchBuffer.ToLower()))
-                .ToArray();
-
+            var filteredKeys = _playerDict.Keys.Where(name => string.IsNullOrEmpty(_playerSearchBuffer) || name.ToLower().Contains(_playerSearchBuffer.ToLower())).ToArray();
             foreach (var playerName in filteredKeys)
             {
                 bool isSelected = playerName == _selectedPlayerName;
@@ -211,7 +285,6 @@ namespace MyCoolMod
             }
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
-
             GUILayout.BeginVertical();
             if (_selectedCharacter == null)
             {
@@ -233,12 +306,36 @@ namespace MyCoolMod
                     GUILayout.EndHorizontal();
                 });
 
-                CollapsibleSection("Trolling & Movement", () => {
-                    if (GUILayout.Button("Bees!", _buttonStyle)) ModUtilities.AttackWithBees(_selectedCharacter);
+                CollapsibleSection("Movement & Control", () => {
                     if (GUILayout.Button("Fling", _buttonStyle)) ModUtilities.FlingPlayer(_selectedCharacter);
-                    if (GUILayout.Button("Meteor Strike", _buttonStyle)) ModUtilities.MeteorStrikePlayer(_selectedCharacter);
+                    if (GUILayout.Button("Tumble", _buttonStyle)) ModUtilities.TumblePlayer(_selectedCharacter);
+                    if (GUILayout.Button("Trip", _buttonStyle)) ModUtilities.TripPlayer(_selectedCharacter);
+                    if (GUILayout.Button("Pass Out", _buttonStyle)) ModUtilities.PassOutPlayer(_selectedCharacter);
+                    if (GUILayout.Button("Wake Up", _buttonStyle)) ModUtilities.WakeUpPlayer(_selectedCharacter);
+                    if (GUILayout.Button("Stun Lock", _buttonStyle)) ModUtilities.StunLockPlayer(_selectedCharacter);
                     if (GUILayout.Button("Freeze", _buttonStyle)) ModUtilities.FreezePlayer(_selectedCharacter);
                     if (GUILayout.Button("Unfreeze", _buttonStyle)) ModUtilities.UnfreezePlayer(_selectedCharacter);
+                    if (GUILayout.Button("Force Push", _buttonStyle)) ModUtilities.ForcePushPlayer(_selectedCharacter);
+                    if (GUILayout.Button("Meteor Strike", _buttonStyle)) ModUtilities.MeteorStrikePlayer(_selectedCharacter);
+                });
+
+                CollapsibleSection("Spawnables & Traps", () => {
+                    if (GUILayout.Button("Explode", _buttonStyle)) ModUtilities.ExplodePlayer(_selectedCharacter);
+                    if (GUILayout.Button("Bees!", _buttonStyle)) ModUtilities.AttackWithBees(_selectedCharacter);
+                    if (GUILayout.Button("Cactus!", _buttonStyle)) ModUtilities.CactusPlayer(_selectedCharacter);
+                    if (GUILayout.Button("Magic Bean!", _buttonStyle)) ModUtilities.MagicBeanPlayer(_selectedCharacter);
+                    if (GUILayout.Button("Jellyfish Bomb (5x)", _buttonStyle)) ModUtilities.JellyfishBomb(_selectedCharacter, 5);
+                    if (GUILayout.Button("Jellyfish Rain (15x)", _buttonStyle)) ModUtilities.JellyfishRain(_selectedCharacter, 10f, 15);
+                    if (GUILayout.Button("Mark with Flare", _buttonStyle)) ModUtilities.MarkPlayerWithFlare(_selectedCharacter);
+                });
+
+                CollapsibleSection("Carry & Items", () => {
+                    _itemToGive = GUILayout.TextField(_itemToGive, _textFieldStyle);
+                    if (GUILayout.Button("Give Item", _buttonStyle)) ModUtilities.GiveItemToPlayer(_selectedCharacter, _itemToGive);
+                    if (GUILayout.Button("Disarm", _buttonStyle)) ModUtilities.DisarmPlayer(_selectedCharacter);
+                    if (GUILayout.Button("Force To Carry Me", _buttonStyle)) ModUtilities.ForcePlayerToCarryMe(_selectedCharacter);
+                    if (GUILayout.Button("Carry & Fling", _buttonStyle)) ModUtilities.CarryAndFling(_selectedCharacter);
+                    if (GUILayout.Button("Morale Boost", _buttonStyle)) ModUtilities.MoraleBoostPlayer(_selectedCharacter);
                 });
 
                 CollapsibleSection("Appearance", () => {
@@ -249,37 +346,42 @@ namespace MyCoolMod
                     GUILayout.EndHorizontal();
                 });
 
-                CollapsibleSection("Items & Carry", () => {
-                    _itemToGive = GUILayout.TextField(_itemToGive, _textFieldStyle);
-                    if (GUILayout.Button("Give Item", _buttonStyle)) ModUtilities.GiveItemToPlayer(_selectedCharacter, _itemToGive);
-                    if (GUILayout.Button("Disarm", _buttonStyle)) ModUtilities.DisarmPlayer(_selectedCharacter);
-                    if (GUILayout.Button("Force To Carry Me", _buttonStyle)) ModUtilities.ForcePlayerToCarryMe(_selectedCharacter);
-                });
-
                 GUILayout.EndScrollView();
             }
             GUILayout.EndVertical();
-
             GUILayout.EndHorizontal();
         }
 
         private void DrawGlobalChaosCategory()
         {
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
-            CollapsibleSection("All Players (Excludes You)", () => {
+
+            CollapsibleSection("Mass Player Actions (Excludes You)", () => {
                 if (GUILayout.Button("Kill All", _buttonStyle)) ModUtilities.KillAllPlayers();
                 if (GUILayout.Button("Revive All", _buttonStyle)) ModUtilities.ReviveAllPlayers();
+                if (GUILayout.Button("Pass Out All", _buttonStyle)) ModUtilities.PassOutAll();
                 if (GUILayout.Button("Fling All", _buttonStyle)) ModUtilities.FlingAll();
+                if (GUILayout.Button("Stun Lock All", _buttonStyle)) ModUtilities.StunLockAll();
                 if (GUILayout.Button("Bees on All", _buttonStyle)) ModUtilities.BeesAll();
+                if (GUILayout.Button("Jellyfish All", _buttonStyle)) ModUtilities.JellyfishAll();
+                if (GUILayout.Button("Cactus All", _buttonStyle)) ModUtilities.CactusAllPlayers();
+                if (GUILayout.Button("Explode All", _buttonStyle)) ModUtilities.ExplodeAllPlayers();
+                if (GUILayout.Button("Magic Bean All", _buttonStyle)) ModUtilities.MagicBeanAllPlayers();
                 if (GUILayout.Button("Make All Tiny", _buttonStyle)) ModUtilities.MakeAllPlayersTiny();
                 if (GUILayout.Button("Reset All Sizes", _buttonStyle)) ModUtilities.ResetAllPlayerSizes();
                 if (GUILayout.Button("<b><color=red>Crash All</color></b>", _buttonStyle)) ModUtilities.CrashAll();
             });
-            CollapsibleSection("Session Control", () => {
+
+            CollapsibleSection("Carry Chains & Session", () => {
+                if (GUILayout.Button("Create Carry Chain", _buttonStyle)) ModUtilities.ForceCarryChain();
+                if (GUILayout.Button("Create Carry Circle", _buttonStyle)) ModUtilities.ForceCarryCircle();
+                if (GUILayout.Button("Break All Carries", _buttonStyle)) ModUtilities.BreakAllCarries();
+                DrawSeparator(10);
                 if (GUILayout.Button("Teleport All To Me", _buttonStyle)) ModUtilities.TeleportAllPlayersToMe();
                 if (GUILayout.Button("End Game (Force Draw)", _buttonStyle)) ModUtilities.EndGame();
                 if (GUILayout.Button("Force Win For Me", _buttonStyle)) ModUtilities.ForceWinGame();
             });
+
             GUILayout.EndScrollView();
         }
 
@@ -305,71 +407,17 @@ namespace MyCoolMod
         private void DrawServerCategory()
         {
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
+
             GUILayout.Label("Server-Side Cosmetics", _headerLabelStyle);
             GUILayout.Label("These mods affect player appearances for everyone in the lobby.", _labelStyle);
+            GUI.backgroundColor = new Color(0.5f, 0.5f, 0.5f, 0.5f);
+            GUILayout.BeginVertical("box");
+            GUILayout.Label("Appearance Features Unavailable", _subHeaderStyle);
+            GUILayout.Label("The RPCs required to change player cosmetics were not found in the game dump.", _labelStyle);
+            GUILayout.Label("As a result, Appearance Scrambler, Copy Appearance, and Force Change Appearance have been disabled.", _labelStyle);
 
-            CollapsibleSection("Appearance Scrambler", () =>
-            {
-                GUILayout.Label("Rapidly randomizes everyone's cosmetics. Pure chaos.", _labelStyle);
-                if (GUILayout.Button("Start Scramble!", _buttonStyle))
-                {
-                    StartCoroutine(ModUtilities.AppearanceScramblerRoutine());
-                }
-            });
-
-            CollapsibleSection("Copy Appearance", () =>
-            {
-                GUILayout.BeginHorizontal();
-                // Source Player Selection
-                GUILayout.BeginVertical();
-                GUILayout.Label("1. Select Source Player", _subHeaderStyle);
-                if (GUILayout.Button(_sourcePlayer ? _sourcePlayer.characterName : "Click to Select", _buttonStyle))
-                {
-                    // A simple way to create a player selection menu would be needed here.
-                    // For now, let's assume a basic implementation. A more advanced UI would list players.
-                }
-                GUILayout.EndVertical();
-
-                // Destination Player Selection
-                GUILayout.BeginVertical();
-                GUILayout.Label("2. Select Destination Player", _subHeaderStyle);
-                if (GUILayout.Button(_destinationPlayer ? _destinationPlayer.characterName : "Click to Select", _buttonStyle))
-                {
-                    // Same as above
-                }
-                GUILayout.EndVertical();
-                GUILayout.EndHorizontal();
-
-                GUI.enabled = _sourcePlayer != null && _destinationPlayer != null;
-                if (GUILayout.Button("3. Copy Appearance", _buttonStyle))
-                {
-                    ModUtilities.CopyPlayerAppearance(_sourcePlayer, _destinationPlayer);
-                }
-                GUI.enabled = true;
-                GUILayout.Label("Note: A full player selection UI would be needed for this to be fully interactive.", _labelStyle);
-            });
-            CollapsibleSection("Force Change Appearance (On Selected Player)", () =>
-            {
-                if (_selectedCharacter == null)
-                {
-                    GUILayout.Label("Go to 'Player Targeting' and select a player first.", _labelStyle);
-                }
-                else
-                {
-                    GUILayout.Label($"Targeting: {_selectedCharacter.characterName}", _headerLabelStyle);
-                    _selectedCosmeticType = (Customization.Type)GUILayout.SelectionGrid((int)_selectedCosmeticType, Enum.GetNames(typeof(Customization.Type)), 4, _buttonStyle);
-                    GUILayout.Label("Item Index:", _labelStyle);
-                    _cosmeticIndexStr = GUILayout.TextField(_cosmeticIndexStr, _textFieldStyle);
-                    if (GUILayout.Button("Apply Change", _buttonStyle))
-                    {
-                        if (int.TryParse(_cosmeticIndexStr, out int index))
-                        {
-                            ModUtilities.ForceChangeAppearance(_selectedCharacter, _selectedCosmeticType, index);
-                        }
-                    }
-                }
-            });
-
+            GUILayout.EndVertical();
+            GUI.backgroundColor = Color.white;
 
             GUILayout.EndScrollView();
         }
@@ -379,11 +427,12 @@ namespace MyCoolMod
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
             CollapsibleSection("Utilities", () => {
                 if (GUILayout.Button("Dump All RPCs to File", _buttonStyle))
+                {
                     ModUtilities.DumpRPCsToFile();
+                    ShowNotification("Success", "RPCs dumped to Downloads", NotificationType.Success);
+                }
                 GUILayout.Label("Dumps a list of game functions to your Downloads folder. For advanced users.", _labelStyle);
-
                 GUILayout.Space(10);
-
                 if (_confirmBadgeUnlock)
                 {
                     GUILayout.Label("Are you sure you want to unlock all badges?", _labelStyle);
@@ -393,34 +442,25 @@ namespace MyCoolMod
                         try
                         {
                             Singleton<AchievementManager>.Instance.DebugGetAllAchievements();
-                            Debug.Log("[Mod] All badges unlocked successfully!");
+                            ShowNotification("Success", "All badges unlocked!", NotificationType.Success);
                         }
                         catch (Exception ex)
                         {
-                            Debug.LogError("[Mod] Failed to unlock badges: " + ex);
+                            ShowNotification("Error", "Failed to unlock badges.", NotificationType.Error);
                         }
                         _confirmBadgeUnlock = false;
                     }
-                    if (GUILayout.Button("No", _buttonStyle))
-                    {
-                        _confirmBadgeUnlock = false;
-                    }
+                    if (GUILayout.Button("No", _buttonStyle)) _confirmBadgeUnlock = false;
                     GUILayout.EndHorizontal();
                 }
                 else
                 {
-                    if (GUILayout.Button("Unlock All Badges", _buttonStyle))
-                        _confirmBadgeUnlock = true;
+                    if (GUILayout.Button("Unlock All Badges", _buttonStyle)) _confirmBadgeUnlock = true;
                     GUILayout.Label("Instantly unlocks all badges/achievements on your account.", _labelStyle);
                 }
-
-                GUILayout.Label("Spawns a custom guidebook at your head with secret pages.", _labelStyle);
-
             });
-
             GUILayout.EndScrollView();
         }
-
 
         #region Helpers, Styles, and Drawing
         private bool NavButton(string text, Category category)
@@ -428,16 +468,10 @@ namespace MyCoolMod
             bool isActive = _currentCategory == category;
             return GUILayout.Button(text, isActive ? _navButtonActiveStyle : _navButtonStyle);
         }
-
         private void CollapsibleSection(string title, Action content)
         {
             if (!_sectionStates.ContainsKey(title)) _sectionStates[title] = true;
-
-            if (GUILayout.Button($"{(_sectionStates[title] ? "▼" : "►")} {title}", _sectionHeaderStyle))
-            {
-                _sectionStates[title] = !_sectionStates[title];
-            }
-
+            if (GUILayout.Button($"{(_sectionStates[title] ? "▼" : "►")} {title}", _sectionHeaderStyle)) _sectionStates[title] = !_sectionStates[title];
             if (_sectionStates[title])
             {
                 GUILayout.BeginVertical(new GUIStyle { padding = new RectOffset(15, 5, 5, 5) });
@@ -445,29 +479,22 @@ namespace MyCoolMod
                 GUILayout.EndVertical();
             }
         }
-
         private void RefreshPlayerDict()
         {
             _playerDict.Clear();
             var allPlayers = PlayerManager.GetAllCharacters();
             if (allPlayers == null) return;
-
             foreach (var player in allPlayers)
             {
-                if (player != null && !player.IsLocal && !string.IsNullOrEmpty(player.characterName))
-                {
-                    _playerDict[player.characterName] = player;
-                }
+                if (player != null && !player.IsLocal && !string.IsNullOrEmpty(player.characterName)) _playerDict[player.characterName] = player;
             }
-
             if (_selectedPlayerName != null && !_playerDict.ContainsKey(_selectedPlayerName))
             {
                 _selectedCharacter = null;
                 _selectedPlayerName = null;
             }
-            Plugin.Log.LogInfo($"Player list refreshed. Found {_playerDict.Count} players.");
+            ShowNotification("Players", $"Found {_playerDict.Count} other players.");
         }
-
         private void InitializeStyles()
         {
             if (_stylesInitialized) return;
@@ -485,14 +512,14 @@ namespace MyCoolMod
             _playerButtonSelectedStyle = new GUIStyle(_buttonStyle) { normal = { background = accent } };
             _toggleStyle = new GUIStyle("toggle") { normal = { textColor = Theme.Text }, onNormal = { textColor = Theme.Accent }, hover = { textColor = Theme.Accent }, fontSize = 14, padding = new RectOffset(20, 0, 3, 3) };
             _textFieldStyle = new GUIStyle("textfield") { normal = { background = bg, textColor = Theme.Text }, padding = new RectOffset(8, 8, 8, 8), fontSize = 14 };
-
             _navButtonStyle = new GUIStyle(_buttonStyle) { alignment = TextAnchor.MiddleLeft, normal = { background = headerBg } };
             _navButtonActiveStyle = new GUIStyle(_navButtonStyle) { normal = { background = accent, textColor = Color.white } };
             _sectionHeaderStyle = new GUIStyle(_buttonStyle) { alignment = TextAnchor.MiddleLeft, fontStyle = FontStyle.Bold };
-
+            _notificationBoxStyle = new GUIStyle("box") { normal = { background = MakeTex(1, 1, Theme.Primary) } };
+            _notificationTitleStyle = new GUIStyle("label") { fontStyle = FontStyle.Bold, fontSize = 14, normal = { textColor = Theme.Text } };
+            _notificationMessageStyle = new GUIStyle("label") { fontSize = 12, normal = { textColor = Theme.Text } };
             _stylesInitialized = true;
         }
-
         private void DrawESP()
         {
             if (Camera.main == null) return;
@@ -501,16 +528,12 @@ namespace MyCoolMod
                 if (character == null || character.IsLocal || character.data.dead) continue;
                 if (Plugin.SkeletonEspEnabled) DrawSkeleton(character);
                 if (Plugin.BoxEspEnabled) ModUtilities.BoxESP();
-
                 Vector3 headPos = character.Head;
                 Vector3 screenPos = Camera.main.WorldToScreenPoint(headPos);
                 if (screenPos.z > 0)
                 {
                     screenPos.y = Screen.height - screenPos.y;
-                    if (Plugin.EspEnabled)
-                    {
-                        GUI.Label(new Rect(screenPos.x + 8, screenPos.y, 200f, 150f), $"<b>{character.characterName}</b>\n[{Vector3.Distance(Camera.main.transform.position, headPos):F1}m]");
-                    }
+                    if (Plugin.EspEnabled) GUI.Label(new Rect(screenPos.x + 8, screenPos.y, 200f, 150f), $"<b>{character.characterName}</b>\n[{Vector3.Distance(Camera.main.transform.position, headPos):F1}m]");
                     if (Plugin.TracersEnabled) DrawLine(new Vector2(Screen.width / 2, Screen.height), screenPos, Theme.Accent);
                 }
             }

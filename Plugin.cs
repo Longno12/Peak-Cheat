@@ -1,8 +1,9 @@
 ﻿using BepInEx;
 using BepInEx.Logging;
+using MyCoolMod.Patches;
 using UnityEngine;
 using UnityEngine.UI.Extensions;
-using MyCoolMod.Patches;
+using static Zorro.ControllerSupport.Rumble.RumbleClip;
 
 namespace MyCoolMod
 {
