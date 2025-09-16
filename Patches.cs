@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using MyCoolMod;
 using System;
 using System.Collections.Generic;
@@ -168,6 +168,26 @@ namespace ClassLibrary1
                 return !NoD;
             }
         }
+
+        [HarmonyPatch(typeof(Character), "StartPassedOutOnTheBeach")]
+        public static class PreventBeachPassout
+        {
+            [HarmonyPostfix]
+            static void WakeUp()
+            {
+                var localPlayer = Character.localCharacter;
+                if (localPlayer != null && localPlayer.data is CharacterData characterData)
+                {
+                    characterData.passedOut = false;
+                    characterData.fullyPassedOut = false;
+                    characterData.passOutValue = 0f;
+                    characterData.passedOutOnTheBeach = 0f;
+                    characterData.lastPassedOut = float.MinValue;
+                    localPlayer.RPCA_UnFall();
+                }
+            }
+        }
+
         public static bool NoS;
         public static bool NoP;
         public static bool NoR;
