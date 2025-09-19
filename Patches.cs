@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using MyCoolMod;
 using System;
 using System.Collections.Generic;

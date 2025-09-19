@@ -12,11 +12,11 @@ public class BadgeUnlocker : MonoBehaviour
         try
         {
             Singleton<AchievementManager>.Instance.DebugGetAllAchievements();
-            Debug.Log("[BadgeUnlocker] All badges have been granted!");
+            UnityEngine.Debug.Log("[BadgeUnlocker] All badges have been granted!");
         }
         catch (Exception ex)
         {
-            Debug.LogError("[BadgeUnlocker] Failed to grant badges: " + ex);
+            UnityEngine.Debug.LogError("[BadgeUnlocker] Failed to grant badges: " + ex);
         }
     }
 }

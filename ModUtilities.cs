@@ -1,6 +1,8 @@
-﻿using Photon.Pun;
+﻿using ExitGames.Client.Photon;
+using HarmonyLib;
+using Photon.Pun;
 using Photon.Realtime;
-using ExitGames.Client.Photon;
+using pworld.Scripts;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -9,6 +11,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace MyCoolMod
 {
@@ -16,6 +19,49 @@ namespace MyCoolMod
     {
         private static float _originalMovementForce = -1f;
         private static float _originalJumpImpulse = -1f;
+        public static bool GetItem(this Character player, out Item item)
+        {
+            var currentItem = player.data?.currentItem;
+
+            if (currentItem != null)
+            {
+                item = currentItem;
+                return true;
+            }
+
+            item = null;
+            return false;
+        }
+        public static void DeleteItem(this Character player)
+        {
+
+            if (!player.GetItem(out var item))
+            {
+                Plugin.Log.Log(BepInEx.Logging.LogLevel.Warning, $"Couldnt force consume Item (Instance is null)");
+                return;
+            }
+
+            if (item == null)
+            {
+                Plugin.Log.Log(BepInEx.Logging.LogLevel.Warning, $"Couldnt force consume Item (GetItem = true, Instance is null)");
+                return;
+            }
+
+            item.photonView.RPC("Consume", RpcTarget.All, -1);
+        }
+        public static void DisableItems()
+        {
+            var allPlayers = PlayerManager.GetAllCharacters();
+            if (allPlayers == null) return;
+
+            foreach (var player in allPlayers)
+            {
+                if (player != null && player.GetItem(out _))
+                {
+                    player.DeleteItem();
+                }
+            }
+        }
 
         #region Basic player utilities
         public static void KillPlayer(Character target)
@@ -777,8 +823,6 @@ namespace MyCoolMod
         private static float _hue1 = 0f;
         private static float _hue2 = 0f;
         private static float _hue3 = 0f;
-        private static float _hue4 = 0f;
-        private static float _hue5 = 0f;
 
         [PunRPC]
         public static void ChangeColour(Vector3 rgb, GameObject target)
@@ -849,7 +893,7 @@ namespace MyCoolMod
 
             target.photonView.RPC("ChangeColour", RpcTarget.AllBuffered, new object[] { new Vector3(_flashColor.r, _flashColor.g, _flashColor.b), target.gameObject });
         }
-
+        
         public static void ExplodePlayer(Character target)
         {
             if (!ValidateTarget(target, "ExplodePlayer")) return;
@@ -886,7 +930,7 @@ namespace MyCoolMod
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Failed to instantiate vine prefab: {e.Message}");
+                    UnityEngine.Debug.LogError($"Failed to instantiate vine prefab: {e.Message}");
                 }
             }
         }
@@ -979,6 +1023,32 @@ namespace MyCoolMod
         {
             var p = PlayerManager.GetLocalPlayer();
             if (p != null) CactusPlayer(p);
+        }
+        private static bool _airJumpAvailable = true;
+        private static bool _wasGroundedLastFrame = true;
+        public static void HandleAirJump()
+        {
+            var localPlayer = PlayerManager.GetLocalPlayer();
+            if (localPlayer == null || localPlayer.data == null)
+            {
+                return;
+            }
+            bool isGrounded = localPlayer.data.isGrounded;
+            if (isGrounded && !_wasGroundedLastFrame)
+            {
+                _airJumpAvailable = true;
+            }
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                if (!isGrounded && _airJumpAvailable)
+                {
+                    _airJumpAvailable = false;
+                    float airJumpForce = 10;
+                    PerformActionOnPlayer(localPlayer, "RPCA_AddForceToBodyPart", 0, Vector3.up * airJumpForce);
+                    ModGUI.ShowNotification("Movement", "Air Jumped!", ModGUI.NotificationType.Success);
+                }
+            }
+            _wasGroundedLastFrame = isGrounded;
         }
     }
 }

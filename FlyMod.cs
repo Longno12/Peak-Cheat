@@ -211,7 +211,7 @@ namespace MyCoolMod
             {
                 if (bodyPart?.Rig != null)
                 {
-                    bodyPart.Rig.velocity = smoothVelocity;
+                    bodyPart.Rig.linearVelocity = smoothVelocity;
                 }
             }
             if (Camera.main != null)

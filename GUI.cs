@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Zorro.Core;
+using AntiCrash.Miscellaneous;
 
 namespace MyCoolMod
 {
@@ -118,11 +119,6 @@ namespace MyCoolMod
         private string _itemToGive = "Flashlight";
         private Dictionary<string, bool> _sectionStates = new Dictionary<string, bool>();
         private Vector2 _scrollPos;
-
-        private Character _sourcePlayer;
-        private Character _destinationPlayer;
-        private Customization.Type _selectedCosmeticType = Customization.Type.Hat;
-        private string _cosmeticIndexStr = "0";
 
         // --- GUI Styles ---
         private GUIStyle _windowStyle, _labelStyle, _headerLabelStyle, _subHeaderStyle, _buttonStyle, _toggleStyle, _textFieldStyle;
@@ -433,6 +429,7 @@ namespace MyCoolMod
                 }
                 GUILayout.Label("Dumps a list of game functions to your Downloads folder. For advanced users.", _labelStyle);
                 GUILayout.Space(10);
+
                 if (_confirmBadgeUnlock)
                 {
                     GUILayout.Label("Are you sure you want to unlock all badges?", _labelStyle);
@@ -458,9 +455,28 @@ namespace MyCoolMod
                     if (GUILayout.Button("Unlock All Badges", _buttonStyle)) _confirmBadgeUnlock = true;
                     GUILayout.Label("Instantly unlocks all badges/achievements on your account.", _labelStyle);
                 }
+                GUILayout.Space(20);
+                GUILayout.Label("Anti-Crash Protection", _labelStyle);
+                bool newEnabled = GUILayout.Toggle(AntiCrash.Miscellaneous.AntiCrash.Enabled, "Enable Anti-Crash", _buttonStyle);
+                if (newEnabled != AntiCrash.Miscellaneous.AntiCrash.Enabled)
+                {
+                    AntiCrash.Miscellaneous.AntiCrash.Enabled = newEnabled;
+                    string status = newEnabled ? "enabled" : "disabled";
+                    ShowNotification("Anti-Crash", $"Crash shield {status}.", NotificationType.Info);
+                }
+                GUILayout.Label("Blocks spammy RPCs (Explosions, Constructs, Firewood) to prevent lag/crashes.", _labelStyle);
+                GUILayout.Space(10);
+                if (GUILayout.Button("Disable All Items", _buttonStyle))
+                {
+                    ModUtilities.DisableItems();
+                    ShowNotification("Items Disabled", "Forced all players to drop their items.", NotificationType.Warning);
+                }
+                GUILayout.Label("Forces every player in the lobby to consume/drop their currently held item.", _labelStyle);
+
             });
             GUILayout.EndScrollView();
         }
+
 
         #region Helpers, Styles, and Drawing
         private bool NavButton(string text, Category category)
