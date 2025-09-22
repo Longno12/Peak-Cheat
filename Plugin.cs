@@ -31,6 +31,13 @@ namespace MyCoolMod
         public static bool StaminaBarEspEnabled { get; set; } = false;
         public static bool HeldItemEspEnabled { get; set; } = false;
         public static bool SkeletonEspEnabled { get; set; } = false;
+        public static bool StatusLockEnabled;
+        public static bool ItemSpawnEnabled;
+        public static bool CustomPoofEnabled;
+        public static Color CustomPoofColor = Color.white;
+        public static float CustomPoofScale = 1.0f;
+        public static bool TimeScaleEnabled;
+        public static float TimeScaleValue = 1.0f;
 
         public static ManualLogSource Log;
         internal static bool IsGuiVisible = true;

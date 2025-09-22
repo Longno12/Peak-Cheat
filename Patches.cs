@@ -1,18 +1,25 @@
 ﻿using HarmonyLib;
 using MyCoolMod;
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
+using Photon.Pun;
 using static Character;
 
 namespace ClassLibrary1
 {
     internal class Patches
     {
+        public static bool NoS;
+        public static bool NoP;
+        public static bool NoR;
+        public static bool NoD;
+        public static bool NoSL;
+        public static bool NoDstry;
+        public static bool LowGravityEnabled;
+        public static bool TimeScaleEnabled;
+
         [HarmonyPatch(typeof(CharacterMovement), "GetMovementForce")]
         [HarmonyPostfix]
         public static void SpeedHackPatch(ref float __result)
@@ -20,6 +27,7 @@ namespace ClassLibrary1
             if (Plugin.SpeedMultiplier > 1.0f)
             {
                 __result *= Plugin.SpeedMultiplier;
+                Plugin.Log.LogInfo($"Applied speed multiplier: {Plugin.SpeedMultiplier}");
             }
         }
 
@@ -29,18 +37,17 @@ namespace ClassLibrary1
         {
             if (Plugin.JumpMultiplier > 1.0f)
             {
+                float originalJump = __instance.jumpImpulse;
                 __instance.jumpImpulse *= Plugin.JumpMultiplier;
-                __instance.StartCoroutine(ResetJumpImpulse(__instance));
+                __instance.StartCoroutine(ResetJumpImpulse(__instance, originalJump));
+                Plugin.Log.LogInfo($"Applied jump multiplier: {Plugin.JumpMultiplier}");
             }
         }
 
-        private static System.Collections.IEnumerator ResetJumpImpulse(CharacterMovement movementInstance)
+        private static IEnumerator ResetJumpImpulse(CharacterMovement movementInstance, float originalJump)
         {
             yield return new WaitForEndOfFrame();
-            if (Plugin.JumpMultiplier > 1.0f)
-            {
-                movementInstance.jumpImpulse /= Plugin.JumpMultiplier;
-            }
+            movementInstance.jumpImpulse = originalJump;
         }
 
         [HarmonyPatch(typeof(CharacterMovement), "CheckFallDamage")]
@@ -49,6 +56,7 @@ namespace ClassLibrary1
         {
             if (Plugin.NoFallDamageEnabled)
             {
+                Plugin.Log.LogInfo("No fall damage applied.");
                 return false;
             }
             return true;
@@ -58,12 +66,14 @@ namespace ClassLibrary1
         [HarmonyPrefix]
         public static bool AlwaysSprintPatch(Character __instance, float usage)
         {
-            if (Plugin.AlwaysSprintEnabled && __instance.data.isSprinting)
+            if ((Plugin.AlwaysSprintEnabled || NoS) && __instance.data.isSprinting)
             {
+                Plugin.Log.LogInfo("Prevented stamina usage for sprint.");
                 return false;
             }
             return true;
         }
+
         [HarmonyPatch]
         public static class SprintPatches
         {
@@ -78,7 +88,6 @@ namespace ClassLibrary1
                     Plugin.Log.LogError("Could not find internal method Character.CheckSprint(). The Always Sprint patch will be disabled.");
                     return false;
                 }
-
                 Plugin.Log.LogInfo("Successfully found internal method Character.CheckSprint() for sprint patch.");
                 return true;
             }
@@ -87,7 +96,7 @@ namespace ClassLibrary1
             [HarmonyPostfix]
             public static void ForceSprintPatch(Character __instance)
             {
-                if (Plugin.AlwaysSprintEnabled && __instance.IsLocal)
+                if ((Plugin.AlwaysSprintEnabled || NoS) && __instance.IsLocal)
                 {
                     bool canSprint = (bool)checkSprintMethod.Invoke(__instance, null);
                     if (canSprint)
@@ -97,18 +106,8 @@ namespace ClassLibrary1
                     }
                 }
             }
-
-            [HarmonyPatch(typeof(Character), "UseStamina")]
-            [HarmonyPrefix]
-            public static bool NoStaminaForSprintPatch(Character __instance)
-            {
-                if (Plugin.AlwaysSprintEnabled && __instance.data.isSprinting)
-                {
-                    return false;
-                }
-                return true;
-            }
         }
+
         [HarmonyPatch(typeof(CharacterItems), "DropAllItems")]
         public static class KeepItemsPatch
         {
@@ -125,47 +124,77 @@ namespace ClassLibrary1
         }
 
         [HarmonyPatch(typeof(GameOverHandler), "BeginIslandLoadRPC")]
-        public class SoftLockPatch
+        public static class SoftLockPatch
         {
+            [HarmonyPrefix]
             private static bool Prefix()
             {
-                return !NoSL;
+                if (NoSL)
+                {
+                    Plugin.Log.LogInfo("Prevented soft lock via BeginIslandLoadRPC.");
+                    return false;
+                }
+                return true;
             }
         }
 
         [HarmonyPatch(typeof(Character), "RPCA_PassOut")]
-        public class PassOutPatch
+        public static class PassOutPatch
         {
+            [HarmonyPrefix]
             private static bool Prefix()
             {
-                return !NoP;
+                if (NoP)
+                {
+                    Plugin.Log.LogInfo("Prevented pass out via RPCA_PassOut.");
+                    return false;
+                }
+                return true;
             }
         }
 
         [HarmonyPatch(typeof(Character), "PassOut")]
-        public class PassOutPatch1
+        public static class PassOutPatch1
         {
+            [HarmonyPrefix]
             private static bool Prefix()
             {
-                return !NoP;
+                if (NoP)
+                {
+                    Plugin.Log.LogInfo("Prevented pass out via PassOut.");
+                    return false;
+                }
+                return true;
             }
         }
 
         [HarmonyPatch(typeof(Character), "RPCA_Die")]
-        public class DiePatch1
+        public static class DiePatch1
         {
+            [HarmonyPrefix]
             private static bool Prefix()
             {
-                return !NoD;
+                if (NoD)
+                {
+                    Plugin.Log.LogInfo("Prevented death via RPCA_Die.");
+                    return false;
+                }
+                return true;
             }
         }
 
         [HarmonyPatch(typeof(Character), "Die")]
-        public class DiePatch2
+        public static class DiePatch2
         {
+            [HarmonyPrefix]
             private static bool Prefix()
             {
-                return !NoD;
+                if (NoD)
+                {
+                    Plugin.Log.LogInfo("Prevented death via Die.");
+                    return false;
+                }
+                return true;
             }
         }
 
@@ -173,26 +202,94 @@ namespace ClassLibrary1
         public static class PreventBeachPassout
         {
             [HarmonyPostfix]
-            static void WakeUp()
+            static void WakeUp(Character __instance)
             {
-                var localPlayer = Character.localCharacter;
-                if (localPlayer != null && localPlayer.data is CharacterData characterData)
+                if (__instance.IsLocal)
                 {
-                    characterData.passedOut = false;
-                    characterData.fullyPassedOut = false;
-                    characterData.passOutValue = 0f;
-                    characterData.passedOutOnTheBeach = 0f;
-                    characterData.lastPassedOut = float.MinValue;
-                    localPlayer.RPCA_UnFall();
+                    __instance.data.passedOut = false;
+                    __instance.data.fullyPassedOut = false;
+                    __instance.data.passOutValue = 0f;
+                    __instance.data.passedOutOnTheBeach = 0f;
+                    __instance.data.lastPassedOut = float.MinValue;
+                    __instance.photonView.RPC("RPCA_UnFall", RpcTarget.All);
+                    Plugin.Log.LogInfo("Prevented beach passout and cleared fall status.");
                 }
             }
         }
 
-        public static bool NoS;
-        public static bool NoP;
-        public static bool NoR;
-        public static bool NoD;
-        public static bool NoSL;
-        public static bool NoDstry;
+        [HarmonyPatch(typeof(CharacterAfflictions), "AddStatus")]
+        [HarmonyPrefix]
+        public static bool StatusEffectPatch(CharacterAfflictions __instance, CharacterAfflictions.STATUSTYPE statusType, float amount, bool sync)
+        {
+            if (Plugin.StatusLockEnabled)
+            {
+                Plugin.Log.LogInfo($"Blocked status effect {statusType} due to StatusLockEnabled.");
+                return false;
+            }
+            if (sync)
+            {
+                __instance.GetComponent<PhotonView>().RPC("SyncStatusesRPC", RpcTarget.All, statusType, amount, true);
+            }
+            return true;
+        }
+
+        [HarmonyPatch(typeof(Character), "FixedUpdate")]
+        [HarmonyPostfix]
+        public static void GravityPatch(Character __instance)
+        {
+            if (LowGravityEnabled || NoR)
+            {
+                float gravityMultiplier = LowGravityEnabled ? 0.2f : (NoR ? -1f : 1f);
+                Vector3 gravityForce = Vector3.up * (Physics.gravity.y * (1f - gravityMultiplier));
+                __instance.photonView.RPC("RPCA_ApplyGravityForce", RpcTarget.All, gravityForce);
+            }
+        }
+
+        [HarmonyPatch(typeof(Character), "Awake")]
+        [HarmonyPostfix]
+        public static void InvisibilityPatch(Character __instance)
+        {
+            if (NoDstry && __instance.IsLocal)
+            {
+                __instance.photonView.RPC("RPCA_SetVisibility", RpcTarget.All, false);
+                Plugin.Log.LogInfo($"Set {__instance.characterName} to invisible.");
+            }
+        }
+
+        [HarmonyPatch(typeof(Character), "Update")]
+        [HarmonyPostfix]
+        public static void TimeScalePatch(Character __instance)
+        {
+            if (TimeScaleEnabled && PhotonNetwork.IsMasterClient && __instance.IsLocal)
+            {
+                float targetTimeScale = Plugin.TimeScaleValue;
+                __instance.photonView.RPC("RPCA_SetTimeScale", RpcTarget.All, targetTimeScale);
+            }
+        }
+
+        [HarmonyPatch(typeof(Character), "WarpPlayer")]
+        [HarmonyPostfix]
+        public static void CustomPoofPatch(Character __instance, Vector3 position, bool poof)
+        {
+            if (poof && Plugin.CustomPoofEnabled)
+            {
+                __instance.photonView.RPC("RPCA_CustomPoofVFX", RpcTarget.All, Plugin.CustomPoofColor, Plugin.CustomPoofScale);
+                Plugin.Log.LogInfo($"Applied custom poof VFX for {__instance.characterName}.");
+            }
+        }
+
+        [HarmonyPatch(typeof(CharacterItems), "EquipSlotRpc")]
+        [HarmonyPostfix]
+        public static void ItemSpawnPatch(CharacterItems __instance, byte slot, int viewID)
+        {
+            if (Plugin.ItemSpawnEnabled)
+            {
+                PhotonView itemView = PhotonView.Find(viewID);
+                if (itemView != null)
+                {
+                    Plugin.Log.LogInfo($"Equipped item with ViewID {viewID} to slot {slot}.");
+                }
+            }
+        }
     }
 }

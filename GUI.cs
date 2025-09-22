@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine;
 using Zorro.Core;
 using AntiCrash.Miscellaneous;
+using Photon.Pun;
 
 namespace MyCoolMod
 {
@@ -19,8 +20,7 @@ namespace MyCoolMod
             DontDestroyOnLoad(gameObject);
         }
 
-        #region --- NEW: Notification System ---
-
+        #region --- Notification System ---
         public enum NotificationType { Info, Success, Warning, Error }
 
         private class Notification
@@ -101,34 +101,70 @@ namespace MyCoolMod
         }
         #endregion
 
-        // --- GUI State & Layout ---
+        #region --- GUI State & Layout ---
         private Rect _windowRect = new Rect(20, 20, 950, 650);
         private bool _stylesInitialized = false;
         private enum Category { Main, LocalPlayer, PlayerTargeting, GlobalChaos, Visuals, Server, Settings }
         private Category _currentCategory = Category.Main;
 
-        // --- Player Management ---
+        // Player Management
         private static Dictionary<string, Character> _playerDict = new Dictionary<string, Character>();
         private Character _selectedCharacter;
         private string _selectedPlayerName;
         private string _playerSearchBuffer = "";
         private Vector2 _playerListScrollPos, _playerActionsScrollPos;
-        private bool _confirmBadgeUnlock = false;
 
-        // --- Mod & UI State ---
+        // Mod & UI State
         private string _itemToGive = "Flashlight";
         private Dictionary<string, bool> _sectionStates = new Dictionary<string, bool>();
         private Vector2 _scrollPos;
+        private bool _confirmBadgeUnlock = false;
+        private float _statusEffectAmount = 0.5f;
+        private string _statusEffectType = "Poison";
+        private float _poofScale = 1.0f;
+        private Color _poofColor = Color.red;
 
-        // --- GUI Styles ---
+        // GUI Styles
         private GUIStyle _windowStyle, _labelStyle, _headerLabelStyle, _subHeaderStyle, _buttonStyle, _toggleStyle, _textFieldStyle;
         private GUIStyle _navButtonStyle, _navButtonActiveStyle, _sectionHeaderStyle, _playerButtonSelectedStyle;
         private static Texture2D _whiteTexture;
+        #endregion
 
-        #region Unchanged Code (Bone Pairs, Theming)
+        #region --- Theme and Bone Pairs ---
         private struct BonePair { public readonly HumanBodyBones Start, End; public BonePair(HumanBodyBones s, HumanBodyBones e) { Start = s; End = e; } }
-        private static readonly BonePair[] bonePairs = new BonePair[] { new BonePair(HumanBodyBones.Head, HumanBodyBones.Neck), new BonePair(HumanBodyBones.Neck, HumanBodyBones.UpperChest), new BonePair(HumanBodyBones.UpperChest, HumanBodyBones.Chest), new BonePair(HumanBodyBones.Chest, HumanBodyBones.Spine), new BonePair(HumanBodyBones.Spine, HumanBodyBones.Hips), new BonePair(HumanBodyBones.UpperChest, HumanBodyBones.LeftShoulder), new BonePair(HumanBodyBones.UpperChest, HumanBodyBones.RightShoulder), new BonePair(HumanBodyBones.LeftShoulder, HumanBodyBones.LeftUpperArm), new BonePair(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm), new BonePair(HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand), new BonePair(HumanBodyBones.RightShoulder, HumanBodyBones.RightUpperArm), new BonePair(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm), new BonePair(HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand), new BonePair(HumanBodyBones.Hips, HumanBodyBones.LeftUpperLeg), new BonePair(HumanBodyBones.Hips, HumanBodyBones.RightUpperLeg), new BonePair(HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg), new BonePair(HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot), new BonePair(HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes), new BonePair(HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg), new BonePair(HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot), new BonePair(HumanBodyBones.RightFoot, HumanBodyBones.RightToes) };
-        private static class Theme { public static readonly Color Background = new Color(0.1f, 0.1f, 0.13f, 1f); public static readonly Color Primary = new Color(0.17f, 0.17f, 0.21f, 1f); public static readonly Color Accent = new Color(0.32f, 0.3f, 0.9f, 1f); public static readonly Color AccentActive = new Color(0.4f, 0.38f, 1.0f, 1f); public static readonly Color Text = new Color(0.9f, 0.9f, 0.9f, 1f); public static readonly Color HeaderBG = new Color(0.12f, 0.12f, 0.15f, 1f); }
+        private static readonly BonePair[] bonePairs = new BonePair[] {
+            new BonePair(HumanBodyBones.Head, HumanBodyBones.Neck),
+            new BonePair(HumanBodyBones.Neck, HumanBodyBones.UpperChest),
+            new BonePair(HumanBodyBones.UpperChest, HumanBodyBones.Chest),
+            new BonePair(HumanBodyBones.Chest, HumanBodyBones.Spine),
+            new BonePair(HumanBodyBones.Spine, HumanBodyBones.Hips),
+            new BonePair(HumanBodyBones.UpperChest, HumanBodyBones.LeftShoulder),
+            new BonePair(HumanBodyBones.UpperChest, HumanBodyBones.RightShoulder),
+            new BonePair(HumanBodyBones.LeftShoulder, HumanBodyBones.LeftUpperArm),
+            new BonePair(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm),
+            new BonePair(HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand),
+            new BonePair(HumanBodyBones.RightShoulder, HumanBodyBones.RightUpperArm),
+            new BonePair(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm),
+            new BonePair(HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand),
+            new BonePair(HumanBodyBones.Hips, HumanBodyBones.LeftUpperLeg),
+            new BonePair(HumanBodyBones.Hips, HumanBodyBones.RightUpperLeg),
+            new BonePair(HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg),
+            new BonePair(HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot),
+            new BonePair(HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes),
+            new BonePair(HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg),
+            new BonePair(HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot),
+            new BonePair(HumanBodyBones.RightFoot, HumanBodyBones.RightToes)
+        };
+
+        private static class Theme
+        {
+            public static readonly Color Background = new Color(0.1f, 0.1f, 0.13f, 1f);
+            public static readonly Color Primary = new Color(0.17f, 0.17f, 0.21f, 1f);
+            public static readonly Color Accent = new Color(0.32f, 0.3f, 0.9f, 1f);
+            public static readonly Color AccentActive = new Color(0.4f, 0.38f, 1.0f, 1f);
+            public static readonly Color Text = new Color(0.9f, 0.9f, 0.9f, 1f);
+            public static readonly Color HeaderBG = new Color(0.12f, 0.12f, 0.15f, 1f);
+        }
         #endregion
 
         void OnGUI()
@@ -203,11 +239,31 @@ namespace MyCoolMod
 
             CollapsibleSection("Toggles", () =>
             {
-                if (GUILayout.Toggle(Plugin.AlwaysSprintEnabled, " Always Sprint", _toggleStyle) != Plugin.AlwaysSprintEnabled) ModUtilities.ToggleAlwaysSprint();
-                if (GUILayout.Toggle(Plugin.NoFallDamageEnabled, " No Fall Damage", _toggleStyle) != Plugin.NoFallDamageEnabled) ModUtilities.ToggleNoFallDamage();
-                if (GUILayout.Toggle(Plugin.KeepItemsEnabled, " Keep Items on Death", _toggleStyle) != Plugin.KeepItemsEnabled) ModUtilities.ToggleKeepItemsOnDeath();
-                bool c1 = Character.localCharacter != null && Character.localCharacter.infiniteStam; if (GUILayout.Toggle(c1, " Infinite Stamina", _toggleStyle) != c1) ModUtilities.ToggleInfiniteStamina();
-                bool c2 = Character.localCharacter != null && Character.localCharacter.statusesLocked; if (GUILayout.Toggle(c2, " Status Immunity", _toggleStyle) != c2) ModUtilities.ToggleStatusImmunity();
+                if (GUILayout.Toggle(Plugin.AlwaysSprintEnabled, " Always Sprint", _toggleStyle) != Plugin.AlwaysSprintEnabled)
+                    ModUtilities.ToggleAlwaysSprint();
+                if (GUILayout.Toggle(Plugin.NoFallDamageEnabled, " No Fall Damage", _toggleStyle) != Plugin.NoFallDamageEnabled)
+                    ModUtilities.ToggleNoFallDamage();
+                if (GUILayout.Toggle(Plugin.KeepItemsEnabled, " Keep Items on Death", _toggleStyle) != Plugin.KeepItemsEnabled)
+                    ModUtilities.ToggleKeepItemsOnDeath();
+                bool c1 = Character.localCharacter != null && Character.localCharacter.infiniteStam;
+                if (GUILayout.Toggle(c1, " Infinite Stamina", _toggleStyle) != c1)
+                    ModUtilities.ToggleInfiniteStamina();
+                bool c2 = Character.localCharacter != null && Character.localCharacter.statusesLocked;
+                if (GUILayout.Toggle(c2, " Status Immunity", _toggleStyle) != c2)
+                    ModUtilities.ToggleStatusImmunity();
+                if (GUILayout.Toggle(ClassLibrary1.Patches.NoP, " No Pass Out", _toggleStyle) != ClassLibrary1.Patches.NoP)
+                    ClassLibrary1.Patches.NoP = !ClassLibrary1.Patches.NoP;
+                if (GUILayout.Toggle(ClassLibrary1.Patches.NoD, " No Death", _toggleStyle) != ClassLibrary1.Patches.NoD)
+                    ClassLibrary1.Patches.NoD = !ClassLibrary1.Patches.NoD;
+                if (GUILayout.Toggle(ClassLibrary1.Patches.NoDstry, " Invisibility", _toggleStyle) != ClassLibrary1.Patches.NoDstry)
+                {
+                    ClassLibrary1.Patches.NoDstry = !ClassLibrary1.Patches.NoDstry;
+                    ModUtilities.ToggleInvisibility(Character.localCharacter);
+                }
+                if (GUILayout.Toggle(ClassLibrary1.Patches.LowGravityEnabled, " Low Gravity", _toggleStyle) != ClassLibrary1.Patches.LowGravityEnabled)
+                    ModUtilities.ToggleLowGravity();
+                if (GUILayout.Toggle(ClassLibrary1.Patches.NoR, " Reverse Gravity", _toggleStyle) != ClassLibrary1.Patches.NoR)
+                    ModUtilities.ToggleReverseGravity();
             });
 
             CollapsibleSection("Flight Controls", () =>
@@ -238,24 +294,85 @@ namespace MyCoolMod
                 GUILayout.Label($"Jump Multiplier: {Plugin.JumpMultiplier:F2}x", _labelStyle);
                 Plugin.JumpMultiplier = GUILayout.HorizontalSlider(Plugin.JumpMultiplier, 1f, 50f);
                 ModUtilities.SetJumpMultiplier(Plugin.JumpMultiplier);
+                if (GUILayout.Button("Toggle Super Speed", _buttonStyle))
+                {
+                    ModUtilities.ToggleSuperSpeed();
+                    ShowNotification("Super Speed", Plugin.SpeedMultiplier > 1.0f ? "Enabled" : "Disabled", NotificationType.Success);
+                }
+            });
+
+            CollapsibleSection("Status Effects", () =>
+            {
+                GUILayout.Label("Status Effect Type:", _labelStyle);
+                _statusEffectType = GUILayout.TextField(_statusEffectType, _textFieldStyle);
+                GUILayout.Label($"Amount: {_statusEffectAmount:F2}", _labelStyle);
+                _statusEffectAmount = GUILayout.HorizontalSlider(_statusEffectAmount, 0.1f, 1.0f);
+                if (GUILayout.Button("Apply Status Effect", _buttonStyle))
+                {
+                    try
+                    {
+                        var statusType = (CharacterAfflictions.STATUSTYPE)Enum.Parse(typeof(CharacterAfflictions.STATUSTYPE), _statusEffectType, true);
+                        ModUtilities.ApplyStatusEffect(Character.localCharacter, statusType, _statusEffectAmount);
+                    }
+                    catch
+                    {
+                        ShowNotification("Error", $"Invalid status type: {_statusEffectType}", NotificationType.Error);
+                    }
+                }
+                if (GUILayout.Button("Clear Status Effect", _buttonStyle))
+                {
+                    try
+                    {
+                        var statusType = (CharacterAfflictions.STATUSTYPE)Enum.Parse(typeof(CharacterAfflictions.STATUSTYPE), _statusEffectType, true);
+                        ModUtilities.ClearStatusEffect(Character.localCharacter, statusType);
+                    }
+                    catch
+                    {
+                        ShowNotification("Error", $"Invalid status type: {_statusEffectType}", NotificationType.Error);
+                    }
+                }
+            });
+
+            CollapsibleSection("Custom Poof VFX", () =>
+            {
+                GUILayout.Label($"Poof Scale: {_poofScale:F2}", _labelStyle);
+                _poofScale = GUILayout.HorizontalSlider(_poofScale, 0.5f, 5.0f);
+                GUILayout.Label("Poof Color (R, G, B):", _labelStyle);
+                float r = _poofColor.r, g = _poofColor.g, b = _poofColor.b;
+                r = GUILayout.HorizontalSlider(r, 0f, 1f);
+                g = GUILayout.HorizontalSlider(g, 0f, 1f);
+                b = GUILayout.HorizontalSlider(b, 0f, 1f);
+                _poofColor = new Color(r, g, b);
+                if (GUILayout.Button("Apply Custom Poof VFX", _buttonStyle))
+                {
+                    ModUtilities.CustomPoofVFX(Character.localCharacter, _poofColor, _poofScale);
+                }
             });
 
             CollapsibleSection("Actions", () =>
             {
-                if (GUILayout.Button("Revive Self", _buttonStyle)) { ModUtilities.ReviveSelf(); }
-                if (GUILayout.Button("Kill Self", _buttonStyle)) { ModUtilities.KillSelf(); }
-                if (GUILayout.Button("Trip Self", _buttonStyle)) { ModUtilities.TripSelf(); }
-                if (GUILayout.Button("Pass Out Self", _buttonStyle)) { ModUtilities.PassOutSelf(); }
+                if (GUILayout.Button("Revive Self", _buttonStyle)) ModUtilities.ReviveSelf();
+                if (GUILayout.Button("Kill Self", _buttonStyle)) ModUtilities.KillSelf();
+                if (GUILayout.Button("Trip Self", _buttonStyle)) ModUtilities.TripSelf();
+                if (GUILayout.Button("Pass Out Self", _buttonStyle)) ModUtilities.PassOutSelf();
                 if (GUILayout.Button("<b><color=red>Crash Self</color></b>", _buttonStyle)) ModUtilities.CrashSelf();
             });
 
             CollapsibleSection("Self Trolling / Effects", () =>
             {
-                if (GUILayout.Button("Bees!", _buttonStyle)) { ModUtilities.BeesSelf(); }
-                if (GUILayout.Button("Jellyfish!", _buttonStyle)) { ModUtilities.JellyfishSelf(); }
-                if (GUILayout.Button("Cactus!", _buttonStyle)) { ModUtilities.CactusSelf(); }
-                if (GUILayout.Button("Explode!", _buttonStyle)) { ModUtilities.ExplodeSelf(); }
-                if (GUILayout.Button("Magic Bean!", _buttonStyle)) { ModUtilities.MagicBeanSelf(); }
+                if (GUILayout.Button("Bees!", _buttonStyle)) ModUtilities.BeesSelf();
+                if (GUILayout.Button("Jellyfish!", _buttonStyle)) ModUtilities.JellyfishSelf();
+                if (GUILayout.Button("Cactus!", _buttonStyle)) ModUtilities.CactusSelf();
+                if (GUILayout.Button("Explode!", _buttonStyle)) ModUtilities.ExplodeSelf();
+                if (GUILayout.Button("Magic Bean!", _buttonStyle)) ModUtilities.MagicBeanSelf();
+            });
+
+            CollapsibleSection("Item Spawner", () =>
+            {
+                GUILayout.Label("Item to Spawn:", _labelStyle);
+                _itemToGive = GUILayout.TextField(_itemToGive, _textFieldStyle);
+                if (GUILayout.Button("Spawn Item", _buttonStyle))
+                    ModUtilities.SpawnItem(Character.localCharacter, _itemToGive);
             });
 
             GUILayout.EndScrollView();
@@ -293,7 +410,8 @@ namespace MyCoolMod
                 GUILayout.Label($"Actions for: {_selectedPlayerName}", _headerLabelStyle);
                 _playerActionsScrollPos = GUILayout.BeginScrollView(_playerActionsScrollPos);
 
-                CollapsibleSection("Core Actions", () => {
+                CollapsibleSection("Core Actions", () =>
+                {
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("Kill", _buttonStyle)) ModUtilities.KillPlayer(_selectedCharacter);
                     if (GUILayout.Button("Revive", _buttonStyle)) ModUtilities.RevivePlayer(_selectedCharacter);
@@ -302,7 +420,8 @@ namespace MyCoolMod
                     GUILayout.EndHorizontal();
                 });
 
-                CollapsibleSection("Movement & Control", () => {
+                CollapsibleSection("Movement & Control", () =>
+                {
                     if (GUILayout.Button("Fling", _buttonStyle)) ModUtilities.FlingPlayer(_selectedCharacter);
                     if (GUILayout.Button("Tumble", _buttonStyle)) ModUtilities.TumblePlayer(_selectedCharacter);
                     if (GUILayout.Button("Trip", _buttonStyle)) ModUtilities.TripPlayer(_selectedCharacter);
@@ -313,9 +432,12 @@ namespace MyCoolMod
                     if (GUILayout.Button("Unfreeze", _buttonStyle)) ModUtilities.UnfreezePlayer(_selectedCharacter);
                     if (GUILayout.Button("Force Push", _buttonStyle)) ModUtilities.ForcePushPlayer(_selectedCharacter);
                     if (GUILayout.Button("Meteor Strike", _buttonStyle)) ModUtilities.MeteorStrikePlayer(_selectedCharacter);
+                    if (GUILayout.Button("Super Speed", _buttonStyle)) ModUtilities.SuperSpeedAllPlayers(); // Applies to selected player
+                    if (GUILayout.Button("Invisibility", _buttonStyle)) ModUtilities.ToggleInvisibility(_selectedCharacter);
                 });
 
-                CollapsibleSection("Spawnables & Traps", () => {
+                CollapsibleSection("Spawnables & Traps", () =>
+                {
                     if (GUILayout.Button("Explode", _buttonStyle)) ModUtilities.ExplodePlayer(_selectedCharacter);
                     if (GUILayout.Button("Bees!", _buttonStyle)) ModUtilities.AttackWithBees(_selectedCharacter);
                     if (GUILayout.Button("Cactus!", _buttonStyle)) ModUtilities.CactusPlayer(_selectedCharacter);
@@ -325,16 +447,66 @@ namespace MyCoolMod
                     if (GUILayout.Button("Mark with Flare", _buttonStyle)) ModUtilities.MarkPlayerWithFlare(_selectedCharacter);
                 });
 
-                CollapsibleSection("Carry & Items", () => {
+                CollapsibleSection("Status Effects", () =>
+                {
+                    GUILayout.Label("Status Effect Type:", _labelStyle);
+                    _statusEffectType = GUILayout.TextField(_statusEffectType, _textFieldStyle);
+                    GUILayout.Label($"Amount: {_statusEffectAmount:F2}", _labelStyle);
+                    _statusEffectAmount = GUILayout.HorizontalSlider(_statusEffectAmount, 0.1f, 1.0f);
+                    if (GUILayout.Button("Apply Status Effect", _buttonStyle))
+                    {
+                        try
+                        {
+                            var statusType = (CharacterAfflictions.STATUSTYPE)Enum.Parse(typeof(CharacterAfflictions.STATUSTYPE), _statusEffectType, true);
+                            ModUtilities.ApplyStatusEffect(_selectedCharacter, statusType, _statusEffectAmount);
+                        }
+                        catch
+                        {
+                            ShowNotification("Error", $"Invalid status type: {_statusEffectType}", NotificationType.Error);
+                        }
+                    }
+                    if (GUILayout.Button("Clear Status Effect", _buttonStyle))
+                    {
+                        try
+                        {
+                            var statusType = (CharacterAfflictions.STATUSTYPE)Enum.Parse(typeof(CharacterAfflictions.STATUSTYPE), _statusEffectType, true);
+                            ModUtilities.ClearStatusEffect(_selectedCharacter, statusType);
+                        }
+                        catch
+                        {
+                            ShowNotification("Error", $"Invalid status type: {_statusEffectType}", NotificationType.Error);
+                        }
+                    }
+                });
+
+                CollapsibleSection("Custom Poof VFX", () =>
+                {
+                    GUILayout.Label($"Poof Scale: {_poofScale:F2}", _labelStyle);
+                    _poofScale = GUILayout.HorizontalSlider(_poofScale, 0.5f, 5.0f);
+                    GUILayout.Label("Poof Color (R, G, B):", _labelStyle);
+                    float r = _poofColor.r, g = _poofColor.g, b = _poofColor.b;
+                    r = GUILayout.HorizontalSlider(r, 0f, 1f);
+                    g = GUILayout.HorizontalSlider(g, 0f, 1f);
+                    b = GUILayout.HorizontalSlider(b, 0f, 1f);
+                    _poofColor = new Color(r, g, b);
+                    if (GUILayout.Button("Apply Custom Poof VFX", _buttonStyle))
+                    {
+                        ModUtilities.CustomPoofVFX(_selectedCharacter, _poofColor, _poofScale);
+                    }
+                });
+
+                CollapsibleSection("Carry & Items", () =>
+                {
                     _itemToGive = GUILayout.TextField(_itemToGive, _textFieldStyle);
-                    if (GUILayout.Button("Give Item", _buttonStyle)) ModUtilities.GiveItemToPlayer(_selectedCharacter, _itemToGive);
+                    if (GUILayout.Button("Give Item", _buttonStyle)) ModUtilities.SpawnItem(_selectedCharacter, _itemToGive);
                     if (GUILayout.Button("Disarm", _buttonStyle)) ModUtilities.DisarmPlayer(_selectedCharacter);
                     if (GUILayout.Button("Force To Carry Me", _buttonStyle)) ModUtilities.ForcePlayerToCarryMe(_selectedCharacter);
                     if (GUILayout.Button("Carry & Fling", _buttonStyle)) ModUtilities.CarryAndFling(_selectedCharacter);
                     if (GUILayout.Button("Morale Boost", _buttonStyle)) ModUtilities.MoraleBoostPlayer(_selectedCharacter);
                 });
 
-                CollapsibleSection("Appearance", () => {
+                CollapsibleSection("Appearance", () =>
+                {
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("Make Giant", _buttonStyle)) ModUtilities.MakePlayerGiant(_selectedCharacter);
                     if (GUILayout.Button("Make Tiny", _buttonStyle)) _selectedCharacter.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
@@ -352,7 +524,8 @@ namespace MyCoolMod
         {
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
 
-            CollapsibleSection("Mass Player Actions (Excludes You)", () => {
+            CollapsibleSection("Mass Player Actions (Excludes You)", () =>
+            {
                 if (GUILayout.Button("Kill All", _buttonStyle)) ModUtilities.KillAllPlayers();
                 if (GUILayout.Button("Revive All", _buttonStyle)) ModUtilities.ReviveAllPlayers();
                 if (GUILayout.Button("Pass Out All", _buttonStyle)) ModUtilities.PassOutAll();
@@ -365,10 +538,84 @@ namespace MyCoolMod
                 if (GUILayout.Button("Magic Bean All", _buttonStyle)) ModUtilities.MagicBeanAllPlayers();
                 if (GUILayout.Button("Make All Tiny", _buttonStyle)) ModUtilities.MakeAllPlayersTiny();
                 if (GUILayout.Button("Reset All Sizes", _buttonStyle)) ModUtilities.ResetAllPlayerSizes();
+                if (GUILayout.Button("Super Speed All", _buttonStyle)) ModUtilities.SuperSpeedAllPlayers();
+                if (GUILayout.Button("Invisibility All", _buttonStyle))
+                {
+                    foreach (var character in Character.AllCharacters)
+                        if (character != null && !character.IsLocal)
+                            ModUtilities.ToggleInvisibility(character);
+                }
+                if (GUILayout.Button("Low Gravity All", _buttonStyle))
+                {
+                    foreach (var character in Character.AllCharacters)
+                        if (character != null && !character.IsLocal)
+                            ModUtilities.ToggleLowGravity();
+                }
+                if (GUILayout.Button("Reverse Gravity All", _buttonStyle))
+                {
+                    foreach (var character in Character.AllCharacters)
+                        if (character != null && !character.IsLocal)
+                            ModUtilities.ToggleReverseGravity();
+                }
                 if (GUILayout.Button("<b><color=red>Crash All</color></b>", _buttonStyle)) ModUtilities.CrashAll();
             });
 
-            CollapsibleSection("Carry Chains & Session", () => {
+            CollapsibleSection("Mass Status Effects", () =>
+            {
+                GUILayout.Label("Status Effect Type:", _labelStyle);
+                _statusEffectType = GUILayout.TextField(_statusEffectType, _textFieldStyle);
+                GUILayout.Label($"Amount: {_statusEffectAmount:F2}", _labelStyle);
+                _statusEffectAmount = GUILayout.HorizontalSlider(_statusEffectAmount, 0.1f, 1.0f);
+                if (GUILayout.Button("Apply Status Effect to All", _buttonStyle))
+                {
+                    try
+                    {
+                        var statusType = (CharacterAfflictions.STATUSTYPE)Enum.Parse(typeof(CharacterAfflictions.STATUSTYPE), _statusEffectType, true);
+                        foreach (var character in Character.AllCharacters)
+                            if (character != null && !character.IsLocal)
+                                ModUtilities.ApplyStatusEffect(character, statusType, _statusEffectAmount);
+                    }
+                    catch
+                    {
+                        ShowNotification("Error", $"Invalid status type: {_statusEffectType}", NotificationType.Error);
+                    }
+                }
+                if (GUILayout.Button("Clear Status Effect for All", _buttonStyle))
+                {
+                    try
+                    {
+                        var statusType = (CharacterAfflictions.STATUSTYPE)Enum.Parse(typeof(CharacterAfflictions.STATUSTYPE), _statusEffectType, true);
+                        foreach (var character in Character.AllCharacters)
+                            if (character != null && !character.IsLocal)
+                                ModUtilities.ClearStatusEffect(character, statusType);
+                    }
+                    catch
+                    {
+                        ShowNotification("Error", $"Invalid status type: {_statusEffectType}", NotificationType.Error);
+                    }
+                }
+            });
+
+            CollapsibleSection("Mass Custom Poof VFX", () =>
+            {
+                GUILayout.Label($"Poof Scale: {_poofScale:F2}", _labelStyle);
+                _poofScale = GUILayout.HorizontalSlider(_poofScale, 0.5f, 5.0f);
+                GUILayout.Label("Poof Color (R, G, B):", _labelStyle);
+                float r = _poofColor.r, g = _poofColor.g, b = _poofColor.b;
+                r = GUILayout.HorizontalSlider(r, 0f, 1f);
+                g = GUILayout.HorizontalSlider(g, 0f, 1f);
+                b = GUILayout.HorizontalSlider(b, 0f, 1f);
+                _poofColor = new Color(r, g, b);
+                if (GUILayout.Button("Apply Custom Poof VFX to All", _buttonStyle))
+                {
+                    foreach (var character in Character.AllCharacters)
+                        if (character != null && !character.IsLocal)
+                            ModUtilities.CustomPoofVFX(character, _poofColor, _poofScale);
+                }
+            });
+
+            CollapsibleSection("Carry Chains & Session", () =>
+            {
                 if (GUILayout.Button("Create Carry Chain", _buttonStyle)) ModUtilities.ForceCarryChain();
                 if (GUILayout.Button("Create Carry Circle", _buttonStyle)) ModUtilities.ForceCarryCircle();
                 if (GUILayout.Button("Break All Carries", _buttonStyle)) ModUtilities.BreakAllCarries();
@@ -378,19 +625,33 @@ namespace MyCoolMod
                 if (GUILayout.Button("Force Win For Me", _buttonStyle)) ModUtilities.ForceWinGame();
             });
 
+            CollapsibleSection("Mass Item Spawner", () =>
+            {
+                GUILayout.Label("Item to Spawn:", _labelStyle);
+                _itemToGive = GUILayout.TextField(_itemToGive, _textFieldStyle);
+                if (GUILayout.Button("Spawn Item for All", _buttonStyle))
+                {
+                    foreach (var character in Character.AllCharacters)
+                        if (character != null && !character.IsLocal)
+                            ModUtilities.SpawnItem(character, _itemToGive);
+                }
+            });
+
             GUILayout.EndScrollView();
         }
 
         private void DrawVisualsCategory()
         {
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
-            CollapsibleSection("ESP", () => {
+            CollapsibleSection("ESP", () =>
+            {
                 Plugin.EspEnabled = GUILayout.Toggle(Plugin.EspEnabled, " Player Info (Name, Distance)", _toggleStyle);
                 Plugin.BoxEspEnabled = GUILayout.Toggle(Plugin.BoxEspEnabled, " 2D Boxes", _toggleStyle);
                 Plugin.TracersEnabled = GUILayout.Toggle(Plugin.TracersEnabled, " Tracers (Lines to players)", _toggleStyle);
                 Plugin.SkeletonEspEnabled = GUILayout.Toggle(Plugin.SkeletonEspEnabled, " Skeletons", _toggleStyle);
             });
-            CollapsibleSection("Camera", () => {
+            CollapsibleSection("Camera", () =>
+            {
                 Plugin.ThirdPersonEnabled = GUILayout.Toggle(Plugin.ThirdPersonEnabled, " Third-Person Camera", _toggleStyle);
                 GUI.enabled = Plugin.ThirdPersonEnabled;
                 GUILayout.Label($"Distance: {Plugin.ThirdPersonDistance:F1}m (Scroll Wheel)", _labelStyle);
@@ -411,9 +672,14 @@ namespace MyCoolMod
             GUILayout.Label("Appearance Features Unavailable", _subHeaderStyle);
             GUILayout.Label("The RPCs required to change player cosmetics were not found in the game dump.", _labelStyle);
             GUILayout.Label("As a result, Appearance Scrambler, Copy Appearance, and Force Change Appearance have been disabled.", _labelStyle);
-
             GUILayout.EndVertical();
             GUI.backgroundColor = Color.white;
+
+            CollapsibleSection("Server Settings", () =>
+            {
+                if (GUILayout.Toggle(ClassLibrary1.Patches.NoSL, " No Soft Lock", _toggleStyle) != ClassLibrary1.Patches.NoSL)
+                    ClassLibrary1.Patches.NoSL = !ClassLibrary1.Patches.NoSL;
+            });
 
             GUILayout.EndScrollView();
         }
@@ -421,7 +687,8 @@ namespace MyCoolMod
         private void DrawSettingsCategory()
         {
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
-            CollapsibleSection("Utilities", () => {
+            CollapsibleSection("Utilities", () =>
+            {
                 if (GUILayout.Button("Dump All RPCs to File", _buttonStyle))
                 {
                     ModUtilities.DumpRPCsToFile();
@@ -472,11 +739,9 @@ namespace MyCoolMod
                     ShowNotification("Items Disabled", "Forced all players to drop their items.", NotificationType.Warning);
                 }
                 GUILayout.Label("Forces every player in the lobby to consume/drop their currently held item.", _labelStyle);
-
             });
             GUILayout.EndScrollView();
         }
-
 
         #region Helpers, Styles, and Drawing
         private bool NavButton(string text, Category category)
@@ -484,6 +749,7 @@ namespace MyCoolMod
             bool isActive = _currentCategory == category;
             return GUILayout.Button(text, isActive ? _navButtonActiveStyle : _navButtonStyle);
         }
+
         private void CollapsibleSection(string title, Action content)
         {
             if (!_sectionStates.ContainsKey(title)) _sectionStates[title] = true;
@@ -495,6 +761,7 @@ namespace MyCoolMod
                 GUILayout.EndVertical();
             }
         }
+
         private void RefreshPlayerDict()
         {
             _playerDict.Clear();
@@ -511,6 +778,7 @@ namespace MyCoolMod
             }
             ShowNotification("Players", $"Found {_playerDict.Count} other players.");
         }
+
         private void InitializeStyles()
         {
             if (_stylesInitialized) return;
@@ -536,6 +804,7 @@ namespace MyCoolMod
             _notificationMessageStyle = new GUIStyle("label") { fontSize = 12, normal = { textColor = Theme.Text } };
             _stylesInitialized = true;
         }
+
         private void DrawESP()
         {
             if (Camera.main == null) return;
@@ -554,10 +823,61 @@ namespace MyCoolMod
                 }
             }
         }
-        private void DrawSkeleton(Character character) { Animator animator = character.refs.animator; if (animator == null) return; foreach (var bonePair in bonePairs) { Transform startBone = animator.GetBoneTransform(bonePair.Start), endBone = animator.GetBoneTransform(bonePair.End); if (startBone == null || endBone == null) continue; Vector3 startPos3D = startBone.position, endPos3D = endBone.position; Vector3 startScreenPos = Camera.main.WorldToScreenPoint(startPos3D), endScreenPos = Camera.main.WorldToScreenPoint(endPos3D); if (startScreenPos.z > 0 && endScreenPos.z > 0) { startScreenPos.y = Screen.height - startScreenPos.y; endScreenPos.y = Screen.height - endScreenPos.y; DrawLine(startScreenPos, endScreenPos, character.refs.customization.PlayerColor); } } }
-        private void DrawSeparator(float space) { GUILayout.Space(space / 2); var rect = GUILayoutUtility.GetRect(10, 1, GUILayout.ExpandWidth(true)); GUI.color = Theme.Background; GUI.DrawTexture(rect, _whiteTexture); GUI.color = Color.white; GUILayout.Space(space / 2); }
-        private void DrawLine(Vector2 start, Vector2 end, Color color) { if (_whiteTexture == null) return; Color savedColor = GUI.color; Matrix4x4 savedMatrix = GUI.matrix; GUI.color = color; Vector2 delta = end - start; float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg; float length = delta.magnitude; GUIUtility.ScaleAroundPivot(new Vector2(length, 1), start); GUIUtility.RotateAroundPivot(angle, start); GUI.DrawTexture(new Rect(start, Vector2.one), _whiteTexture); GUI.matrix = savedMatrix; GUI.color = savedColor; }
-        private Texture2D MakeTex(int w, int h, Color c) { var pix = new Color[w * h]; for (int i = 0; i < pix.Length; ++i) pix[i] = c; var result = new Texture2D(w, h) { hideFlags = HideFlags.HideAndDontSave }; result.SetPixels(pix); result.Apply(); return result; }
+
+        private void DrawSkeleton(Character character)
+        {
+            Animator animator = character.refs.animator;
+            if (animator == null) return;
+            foreach (var bonePair in bonePairs)
+            {
+                Transform startBone = animator.GetBoneTransform(bonePair.Start), endBone = animator.GetBoneTransform(bonePair.End);
+                if (startBone == null || endBone == null) continue;
+                Vector3 startPos3D = startBone.position, endPos3D = endBone.position;
+                Vector3 startScreenPos = Camera.main.WorldToScreenPoint(startPos3D), endScreenPos = Camera.main.WorldToScreenPoint(endPos3D);
+                if (startScreenPos.z > 0 && endScreenPos.z > 0)
+                {
+                    startScreenPos.y = Screen.height - startScreenPos.y;
+                    endScreenPos.y = Screen.height - endScreenPos.y;
+                    DrawLine(startScreenPos, endScreenPos, character.refs.customization.PlayerColor);
+                }
+            }
+        }
+
+        private void DrawSeparator(float space)
+        {
+            GUILayout.Space(space / 2);
+            var rect = GUILayoutUtility.GetRect(10, 1, GUILayout.ExpandWidth(true));
+            GUI.color = Theme.Background;
+            GUI.DrawTexture(rect, _whiteTexture);
+            GUI.color = Color.white;
+            GUILayout.Space(space / 2);
+        }
+
+        private void DrawLine(Vector2 start, Vector2 end, Color color)
+        {
+            if (_whiteTexture == null) return;
+            Color savedColor = GUI.color;
+            Matrix4x4 savedMatrix = GUI.matrix;
+            GUI.color = color;
+            Vector2 delta = end - start;
+            float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+            float length = delta.magnitude;
+            GUIUtility.ScaleAroundPivot(new Vector2(length, 1), start);
+            GUIUtility.RotateAroundPivot(angle, start);
+            GUI.DrawTexture(new Rect(start, Vector2.one), _whiteTexture);
+            GUI.matrix = savedMatrix;
+            GUI.color = savedColor;
+        }
+
+        private Texture2D MakeTex(int w, int h, Color c)
+        {
+            var pix = new Color[w * h];
+            for (int i = 0; i < pix.Length; ++i) pix[i] = c;
+            var result = new Texture2D(w, h) { hideFlags = HideFlags.HideAndDontSave };
+            result.SetPixels(pix);
+            result.Apply();
+            return result;
+        }
         #endregion
     }
 }

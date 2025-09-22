@@ -1050,5 +1050,230 @@ namespace MyCoolMod
             }
             _wasGroundedLastFrame = isGrounded;
         }
+        private static bool _superSpeedEnabled;
+        public static void SuperSpeedAllPlayers(float speedMultiplier = 3f, float jumpMultiplier = 2f)
+        {
+            foreach (var character in Character.AllCharacters)
+            {
+                if (character != null && character.photonView != null)
+                {
+                    try
+                    {
+                        character.photonView.RPC("RPCA_SetMovementParameters", RpcTarget.All,
+                            character.refs.movement.movementForce * speedMultiplier,
+                            character.refs.movement.jumpImpulse * jumpMultiplier);
+                    }
+                    catch (Exception e)
+                    {
+                        Plugin.Log.LogError($"SuperSpeedAllPlayers error for {character.characterName}: {e.Message}");
+                    }
+                }
+            }
+            ModGUI.ShowNotification("Super Speed", "Applied to all players", ModGUI.NotificationType.Success);
+        }
+        public static void ToggleSuperSpeed(float speedMultiplier = 3f, float jumpMultiplier = 2f)
+        {
+            var localPlayer = Character.localCharacter;
+            if (!ValidateTarget(localPlayer, "ToggleSuperSpeed")) return;
+
+            try
+            {
+                _superSpeedEnabled = !_superSpeedEnabled;
+                if (_superSpeedEnabled)
+                {
+                    _originalMovementForce = localPlayer.refs.movement.movementForce;
+                    _originalJumpImpulse = localPlayer.refs.movement.jumpImpulse;
+                    localPlayer.photonView.RPC("RPCA_SetMovementParameters", RpcTarget.All,
+                        localPlayer.refs.movement.movementForce * speedMultiplier,
+                        localPlayer.refs.movement.jumpImpulse * jumpMultiplier);
+                    ModGUI.ShowNotification("Super Speed", "Super Speed Enabled", ModGUI.NotificationType.Success);
+                }
+                else
+                {
+                    localPlayer.photonView.RPC("RPCA_SetMovementParameters", RpcTarget.All,
+                        _originalMovementForce, _originalJumpImpulse);
+                    ModGUI.ShowNotification("Super Speed", "Super Speed Disabled");
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"ToggleSuperSpeed error: {e.Message}");
+            }
+        }
+        public static void ApplyStatusEffect(Character target, CharacterAfflictions.STATUSTYPE statusType, float amount, bool notify = true)
+        {
+            if (!ValidateTarget(target, "ApplyStatusEffect")) return;
+            try
+            {
+                target.photonView.RPC("SyncStatusesRPC", RpcTarget.All, statusType, amount, true);
+                if (notify)
+                    ModGUI.ShowNotification("Status Effect", $"Applied {statusType} ({amount}) to {target.characterName}", ModGUI.NotificationType.Success);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"ApplyStatusEffect error: {e.Message}");
+            }
+        }
+        public static void ClearStatusEffect(Character target, CharacterAfflictions.STATUSTYPE statusType)
+        {
+            if (!ValidateTarget(target, "ClearStatusEffect")) return;
+            try
+            {
+                target.photonView.RPC("SyncStatusesRPC", RpcTarget.All, statusType, 0f, false);
+                ModGUI.ShowNotification("Status Effect", $"Cleared {statusType} from {target.characterName}", ModGUI.NotificationType.Success);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"ClearStatusEffect error: {e.Message}");
+            }
+        }
+        private static bool _lowGravityEnabled;
+        private static bool _reverseGravityEnabled;
+
+        public static void ToggleLowGravity(float gravityMultiplier = 0.2f)
+        {
+            var localPlayer = Character.localCharacter;
+            if (!ValidateTarget(localPlayer, "ToggleLowGravity")) return;
+
+            try
+            {
+                _lowGravityEnabled = !_lowGravityEnabled;
+                if (_lowGravityEnabled)
+                {
+                    localPlayer.photonView.RPC("RPCA_ApplyGravityForce", RpcTarget.All,
+                        Vector3.up * (Physics.gravity.y * (1f - gravityMultiplier)));
+                    ModGUI.ShowNotification("Gravity", "Low Gravity Enabled", ModGUI.NotificationType.Success);
+                }
+                else
+                {
+                    localPlayer.photonView.RPC("RPCA_ApplyGravityForce", RpcTarget.All, Vector3.zero);
+                    ModGUI.ShowNotification("Gravity", "Low Gravity Disabled");
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"ToggleLowGravity error: {e.Message}");
+            }
+        }
+        public static void ToggleReverseGravity()
+        {
+            var localPlayer = Character.localCharacter;
+            if (!ValidateTarget(localPlayer, "ToggleReverseGravity")) return;
+
+            try
+            {
+                _reverseGravityEnabled = !_reverseGravityEnabled;
+                if (_reverseGravityEnabled)
+                {
+                    localPlayer.photonView.RPC("RPCA_ApplyGravityForce", RpcTarget.All,
+                        Vector3.up * (-Physics.gravity.y));
+                    ModGUI.ShowNotification("Gravity", "Reverse Gravity Enabled", ModGUI.NotificationType.Success);
+                }
+                else
+                {
+                    localPlayer.photonView.RPC("RPCA_ApplyGravityForce", RpcTarget.All, Vector3.zero);
+                    ModGUI.ShowNotification("Gravity", "Reverse Gravity Disabled");
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"ToggleReverseGravity error: {e.Message}");
+            }
+        }
+        public static void SpawnItem(Character target, string itemPrefabName, byte slot = 0)
+        {
+            if (!ValidateTarget(target, "SpawnItem") || string.IsNullOrEmpty(itemPrefabName)) return;
+            try
+            {
+                if (Resources.Load<GameObject>(itemPrefabName) == null)
+                {
+                    Plugin.Log.LogError($"Prefab {itemPrefabName} not found");
+                    return;
+                }
+                Vector3 spawnPos = target.Head + Vector3.up * 0.5f;
+                GameObject itemObj = PhotonNetwork.Instantiate(itemPrefabName, spawnPos, Quaternion.identity);
+                if (itemObj != null && itemObj.GetComponent<PhotonView>() != null)
+                {
+                    target.photonView.RPC("EquipSlotRpc", RpcTarget.All, slot, itemObj.GetComponent<PhotonView>().ViewID);
+                    ModGUI.ShowNotification("Item", $"Equipped {itemPrefabName} for {target.characterName}", ModGUI.NotificationType.Success);
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"SpawnItem error: {e.Message}");
+            }
+        }
+        public static void SpawnItem(Character target, string itemPrefabName)
+        {
+            if (!ValidateTarget(target, "SpawnItem") || string.IsNullOrEmpty(itemPrefabName)) return;
+            try
+            {
+                if (Resources.Load<GameObject>(itemPrefabName) == null)
+                {
+                    Plugin.Log.LogError($"Prefab {itemPrefabName} not found");
+                    return;
+                }
+                Vector3 spawnPos = target.Head + Vector3.up * 0.5f;
+                GameObject itemObj = PhotonNetwork.Instantiate(itemPrefabName, spawnPos, Quaternion.identity);
+                if (itemObj != null && itemObj.GetComponent<PhotonView>() != null)
+                {
+                    target.photonView.RPC("GetFedItemRPC", RpcTarget.All, itemObj.GetComponent<PhotonView>().ViewID);
+                    ModGUI.ShowNotification("Item", $"Spawned {itemPrefabName} for {target.characterName}", ModGUI.NotificationType.Success);
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"SpawnItem error: {e.Message}");
+            }
+        }
+        public static void ToggleInvisibility(Character target)
+        {
+            if (!ValidateTarget(target, "ToggleInvisibility")) return;
+            try
+            {
+                bool isInvisible = !target.refs.mainRenderer.enabled;
+                target.photonView.RPC("RPCA_SetVisibility", RpcTarget.All, !isInvisible);
+                ModGUI.ShowNotification("Invisibility", $"{target.characterName} is {(isInvisible ? "visible" : "invisible")}", ModGUI.NotificationType.Success);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"ToggleInvisibility error: {e.Message}");
+            }
+        }
+        public class TimeSync : MonoBehaviourPun, IPunObservable
+        {
+            void IPunObservable.OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+            {
+                if (stream.IsWriting)
+                {
+                    stream.SendNext(Time.timeScale);
+                }
+                else
+                {
+                    Time.timeScale = (float)stream.ReceiveNext();
+                    Time.fixedDeltaTime = 0.02f * Time.timeScale;
+                }
+            }
+
+            [PunRPC]
+            public void RPCA_SetTimeScale(float timeScale)
+            {
+                Time.timeScale = timeScale;
+                Time.fixedDeltaTime = 0.02f * timeScale;
+            }
+        }
+        public static void CustomPoofVFX(Character target, Color color, float scale = 1f)
+        {
+            if (!ValidateTarget(target, "CustomPoofVFX")) return;
+            try
+            {
+                target.photonView.RPC("RPCA_CustomPoofVFX", RpcTarget.All, color, scale);
+                ModGUI.ShowNotification("VFX", $"Custom poof effect on {target.characterName}", ModGUI.NotificationType.Success);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"CustomPoofVFX error: {e.Message}");
+            }
+        }
     }
 }
