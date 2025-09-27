@@ -6,27 +6,30 @@ public static class PlayerManager
     private static Character _localPlayer;
     private static readonly List<Character> _otherPlayers = new List<Character>();
     private static readonly List<Character> _allPlayers = new List<Character>();
-    private static float _timeOfLastSearch = -1f;
+    private static float _lastUpdateTime;
     private const float CACHE_UPDATE_INTERVAL = 1.0f;
 
     private static void UpdatePlayerCache()
     {
-        if (Time.time - _timeOfLastSearch < CACHE_UPDATE_INTERVAL) return;
-        _timeOfLastSearch = Time.time;
+        if (Time.time - _lastUpdateTime < CACHE_UPDATE_INTERVAL) return;
+        _lastUpdateTime = Time.time;
+
+        _localPlayer = null;
         _otherPlayers.Clear();
         _allPlayers.Clear();
-        _localPlayer = null;
-        var allCharactersInSession = Character.AllCharacters;
-        if (allCharactersInSession == null) return;
-        _allPlayers.AddRange(allCharactersInSession);
-        foreach (Character character in allCharactersInSession)
-        {
-            if (character == null) continue;
 
-            if (character.photonView != null && character.photonView.IsMine)
-                _localPlayer = character;
+        var allChars = Character.AllCharacters;
+        if (allChars == null) return;
+
+        foreach (var c in allChars)
+        {
+            if (c == null) continue;
+
+            _allPlayers.Add(c);
+            if (c.photonView != null && c.photonView.IsMine)
+                _localPlayer = c;
             else
-                _otherPlayers.Add(character);
+                _otherPlayers.Add(c);
         }
     }
 
@@ -36,15 +39,39 @@ public static class PlayerManager
         return _localPlayer;
     }
 
-    public static IReadOnlyList<Character> GetTargets()
+    public static IReadOnlyList<Character> GetOtherPlayers()
     {
         UpdatePlayerCache();
         return _otherPlayers;
     }
 
-    public static IReadOnlyList<Character> GetAllCharacters()
+    public static IReadOnlyList<Character> GetAllPlayers()
     {
         UpdatePlayerCache();
         return _allPlayers;
+    }
+
+    public static List<Character> GetAlivePlayers()
+    {
+        UpdatePlayerCache();
+        var alive = new List<Character>();
+        foreach (var player in _allPlayers)
+        {
+            if (player != null && player.data != null && !player.data.dead)
+                alive.Add(player);
+        }
+        return alive;
+    }
+
+    public static List<Character> GetDeadPlayers()
+    {
+        UpdatePlayerCache();
+        var dead = new List<Character>();
+        foreach (var player in _allPlayers)
+        {
+            if (player != null && player.data != null && player.data.dead)
+                dead.Add(player);
+        }
+        return dead;
     }
 }
