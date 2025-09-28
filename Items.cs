@@ -1,4 +1,4 @@
-﻿using MyCoolMod; // Assuming ModGUI and Drawing are defined here
+﻿using MyCoolMod;
 using Photon.Pun;
 using System;
 using System.Collections;
@@ -9,9 +9,6 @@ using UnityEngine;
 
 namespace ClassLibrary1.Cheats
 {
-    /// <summary>
-    /// Main static class for handling item-related cheats and utilities.
-    /// </summary>
     internal static class Items
     {
         public static List<Item> ItemObjects { get; } = new List<Item>();
@@ -254,16 +251,11 @@ namespace ClassLibrary1.Cheats
 
             var local = Character.localCharacter;
             if (local == null) return;
-
-            // FIX: Check if the static list is null or empty. If it is, then find the objects in the scene.
-            // This avoids the type mismatch error and is more explicit about the logic.
             IEnumerable<Luggage> all = Luggage.ALL_LUGGAGE;
             if (all == null || !all.Any())
             {
                 all = UnityEngine.Object.FindObjectsOfType<Luggage>();
             }
-
-            // --- The rest of your method remains exactly the same ---
 
             var head = local.Head;
             var nearby = all.Where(l => l != null)
@@ -298,16 +290,12 @@ namespace ClassLibrary1.Cheats
             }
         }
 
-        /// <summary>
-        /// Gets all available item prefab names from game resources.
-        /// </summary>
         public static string[] GetAvailableItemNamesFromResources()
         {
             try
             {
-                // Returns only the object name, which is required for instantiation.
                 return Resources.FindObjectsOfTypeAll<Item>()
-                                .Where(i => i != null && i.gameObject.scene.name == null) // Filter for prefabs, not scene objects
+                                .Where(i => i != null && i.gameObject.scene.name == null)
                                 .Select(i => i.name.Replace("(Clone)", ""))
                                 .Distinct()
                                 .ToArray();
@@ -338,11 +326,7 @@ namespace ClassLibrary1.Cheats
                 try
                 {
                     string prefabName = names[UnityEngine.Random.Range(0, names.Length)];
-
-                    // Corrected the arguments for OrbitVector.
                     Vector3 spawnPos = cam.transform.position + Vector3.up * (5f + (i * 0.1f)) + UnityUtil.OrbitVector(radius, i * 20f);
-
-                    // Photon requires prefabs to be in a "Resources" folder to be instantiated by name.
                     GameObject spawnedObject = PhotonNetwork.Instantiate(prefabName, spawnPos, Quaternion.identity);
 
                     if (spawnedObject != null)
@@ -350,8 +334,6 @@ namespace ClassLibrary1.Cheats
                         var view = spawnedObject.GetComponent<PhotonView>();
                         if (view != null)
                         {
-                            // This creates a temporary GameObject to delay an action.
-                            // While creating many objects is not ideal, it's a reliable pattern for fire-and-forget actions.
                             DelayedActionRunner.Run(() => {
                                 if (view != null) PhotonNetwork.Destroy(view);
                             }, lifetimeSeconds);
@@ -367,7 +349,6 @@ namespace ClassLibrary1.Cheats
 
         public static void RemoveMyItems()
         {
-            // Find our own PhotonViews that are attached to Item objects and destroy them.
             var views = UnityEngine.Object.FindObjectsOfType<PhotonView>();
             foreach (var pv in views)
             {
@@ -383,10 +364,6 @@ namespace ClassLibrary1.Cheats
 
     #region Helper & Game-Specific Classes
 
-    /// <summary>
-    /// Utility functions for Unity-specific operations.
-    /// Moved out of the Items class for better code structure.
-    /// </summary>
     public static class UnityUtil
     {
         public static Vector3 OrbitVector(float radius, float angleDegrees)
@@ -396,10 +373,6 @@ namespace ClassLibrary1.Cheats
         }
     }
 
-    /// <summary>
-    /// A MonoBehaviour helper to run an action after a delay.
-    /// Moved out of the Items class for reusability.
-    /// </summary>
     internal class DelayedActionRunner : MonoBehaviour
     {
         private Action _action;
@@ -475,4 +448,5 @@ namespace ClassLibrary1.Cheats
     }
 
     #endregion
+
 }
