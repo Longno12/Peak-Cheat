@@ -40,7 +40,7 @@ The menu is organized into several tabs for ease of use:
 1.  **Install BepInEx:** Make sure you have [BepInEx 5](https://github.com/BepInEx/BepInEx/releases) installed for PEAK.
 2.  **Download:** Download the latest `Peak.Mod.dll` from the [Releases](https://github.com/Longno12/Peak-Cheat/releases) page of this repository.
 3.  **Install Mod:** Place the `Peak.Mod.dll` file inside your game's `BepInEx/plugins` folder.
-4.  **Run Game:** Launch the game. The mod will load automatically. Press **F12** to open and close the menu.
+4.  **Run Game:** Launch the game. The mod will load automatically. Press **INSERT** to open and close the menu.
 
 ---
 
